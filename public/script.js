@@ -28,6 +28,13 @@ function playSound(audioObj) {
     if (playPromise !== undefined) playPromise.catch(e => console.warn("Audio blocked"));
 }
 
+// --- NEW FIX: Stop Sound Helper ---
+function stopSound(audioObj) {
+    if (!audioObj) return;
+    audioObj.pause();
+    audioObj.currentTime = 0;
+}
+
 let bgmStarted = false;
 function startBGM() {
     if (!bgmStarted) {
@@ -49,16 +56,16 @@ function showToast(message) {
 
 // --- DYNAMIC FUN FACTS LOGIC ---
 const funFacts = [
-    "🧠 The human brain generates about 20 watts of electricity—enough to power a dim light bulb!",
-    "💾 The first computer mouse was invented in 1964 and was made out of carved wood.",
-    "👾 The highest possible score in Pac-Man is exactly 3,333,360 points.",
-    "🪐 A day on Venus is actually longer than a year on Venus.",
-    "🍯 Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
-    "⚡ Lightning strikes the Earth about 100 times every single second.",
-    "🦈 Sharks have been around for over 400 million years, meaning they existed before trees.",
-    "💻 The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
-    "🧊 Ice is technically classified as a mineral.",
-    "🦉 Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
+    "The human brain generates about 20 watts of electricity—enough to power a dim light bulb!",
+    "The first computer mouse was invented in 1964 and was made out of carved wood.",
+    "The highest possible score in Pac-Man is exactly 3,333,360 points.",
+    "A day on Venus is actually longer than a year on Venus.",
+    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
+    "Lightning strikes the Earth about 100 times every single second.",
+    " Sharks have been around for over 400 million years, meaning they existed before trees.",
+    " The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
+    " Ice is technically classified as a mineral.",
+    " Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
 ];
 
 function setHourlyFunFact() {
@@ -66,10 +73,7 @@ function setHourlyFunFact() {
     if (!display) return;
     
     const now = new Date();
-    // Multiply the day of the month by 24 and add the current hour to get a unique hourly ID
     const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
-    
-    // Use the modulo operator to loop through the array infinitely
     const factIndex = uniqueHourCounter % funFacts.length;
     
     display.innerHTML = funFacts[factIndex];
@@ -80,7 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomParam = urlParams.get('room');
     if (roomParam) document.getElementById('room-input').value = roomParam;
     
-    // Initialize the hourly fun fact
     setHourlyFunFact();
 });
 
@@ -239,18 +242,16 @@ document.getElementById('join-btn').onclick = () => {
     socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, n);
 };
 
-// --- FIX 1: Catch Ghost Joins / Invalid Rooms ---
 socket.on('join-error', (errorMessage) => {
     showToast(`❌ ${errorMessage}`);
     playSound(sfx.lose);
 });
 
-// --- FIX 2: Catch Opponent Disconnects ---
 socket.on('opponent-disconnected', () => {
     showToast(`❌ Opponent disconnected! Returning to menu...`);
     playSound(sfx.lose);
     setTimeout(() => {
-        window.location.reload(); // Hard reset back to safety
+        window.location.reload(); 
     }, 2500);
 });
 
@@ -294,6 +295,9 @@ function startCountdownSequence() {
 }
 
 function renderQuestion() {
+    // FIX IMPLEMENTATION: Make absolutely sure the tick is stopped at the start of a new question
+    stopSound(sfx.tick);
+    
     optsContainer.classList.remove('jammed-state'); 
     optsContainer.classList.add('options-grid'); 
     
@@ -327,6 +331,8 @@ function renderQuestion() {
 
         if (timeLeft <= 0) {
             clearInterval(questionTimer);
+            // FIX IMPLEMENTATION: Stop the tick sound immediately when time runs out
+            stopSound(sfx.tick); 
             socket.emit('submit-answer', gameState.roomId, -1, 0);
             optsContainer.innerHTML = `<h3 style="margin-top:10px; text-align: center; color: #ef4444; grid-column: 1 / -1;">Time's Up!</h3>`;
         }
@@ -338,6 +344,8 @@ function renderQuestion() {
         btn.onclick = () => {
             playSound(sfx.click); 
             clearInterval(questionTimer);
+            // FIX IMPLEMENTATION: Stop the tick sound immediately when an answer is locked in
+            stopSound(sfx.tick);
             socket.emit('submit-answer', gameState.roomId, i, timeLeft);
             optsContainer.innerHTML = `<h3 style="margin-top:10px; color:var(--primary-color); text-align: center; grid-column: 1 / -1;">Answer Locked In</h3>`;
         };
@@ -347,6 +355,9 @@ function renderQuestion() {
 
 socket.on('round-results', (answers) => {
     clearInterval(questionTimer);
+    // FIX IMPLEMENTATION: Final safety net to kill the tick sound when results arrive
+    stopSound(sfx.tick);
+    
     timerDisplay.classList.add('hidden-element');
     optsContainer.classList.remove('options-grid'); 
 
