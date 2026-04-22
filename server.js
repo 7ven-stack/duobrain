@@ -34,7 +34,6 @@ function getFallbackQuestions() {
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- NEW: Session Token Fetcher ---
 async function getSessionToken() {
     try {
         const res = await fetch('https://opentdb.com/api_token.php?command=request');
@@ -46,12 +45,10 @@ async function getSessionToken() {
     return null;
 }
 
-// --- UPDATED: API Fetcher now uses the Session Token ---
 async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, retries = 2) {
     const categoryId = categoryMap[genre] || 9; 
     const diffParam = difficulty !== 'any' ? `&difficulty=${difficulty}` : '';
     
-    // Dynamically append the token if the room has one
     const tokenParam = token ? `&token=${token}` : '';
     const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple${tokenParam}`;
 
@@ -72,11 +69,9 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
             return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
         }
 
-        // Code 4 means the token has seen every possible question in this category
         if (data.response_code === 4 && token) {
             console.log("🔄 Token exhausted! Resetting memory...");
             await fetch(`https://opentdb.com/api_token.php?command=reset&token=${token}`);
-            // Retry the exact same request now that the deck is shuffled
             return await fetchQuestionsFromAPI(genre, difficulty, token, retries);
         }
 
@@ -108,11 +103,9 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
 
 io.on('connection', (socket) => {
     
-    // UPDATED: Grab a token when a room is created
     socket.on('create-room', async (avatar, playerName, genre, difficulty) => {
         const roomId = generateRoomCode();
         
-        // Ask OpenTDB for a memory tracker for this specific lobby
         const roomToken = await getSessionToken(); 
         const liveQuestions = await fetchQuestionsFromAPI(genre, difficulty, roomToken);
         
@@ -152,7 +145,6 @@ io.on('connection', (socket) => {
 
     socket.on('next-question', (roomId) => io.to(roomId).emit('load-next-question'));
 
-    // UPDATED: Pass the token when rematching so OpenTDB remembers what you've played
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
         const room = rooms[roomId];
         if (room) {
@@ -166,6 +158,21 @@ io.on('connection', (socket) => {
 
     socket.on('trigger-powerup', (roomId, type, playerName) => {
         socket.to(roomId).emit('enemy-powerup', type, playerName);
+    });
+
+    // --- FIX 2: Added Disconnect Logic for Host Abandonment ---
+    socket.on('disconnect', () => {
+        for (const roomId in rooms) {
+            const room = rooms[roomId];
+            const playerIndex = room.players.findIndex(p => p.id === socket.id);
+            if (playerIndex !== -1) {
+                // Tell the remaining player their opponent left
+                socket.to(roomId).emit('opponent-disconnected');
+                // Erase the room from server memory
+                delete rooms[roomId];
+                break;
+            }
+        }
     });
 });
 

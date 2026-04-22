@@ -68,6 +68,9 @@ h1 { font-weight: 800; font-size: 2.5rem; margin-bottom: 5px; letter-spacing: -1
 
 input { width: 100%; padding: 16px; margin-bottom: 20px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.3); color: white; font-size: 1.05rem; outline: none; text-align: center; }
 
+/* FIX 5: Force the room code input field to visually display in uppercase */
+#room-input { text-transform: uppercase; }
+
 .massive-code { font-size: 5rem; font-weight: 800; letter-spacing: 15px; color: var(--primary-color); text-shadow: 0 0 30px rgba(99, 102, 241, 0.8); background: rgba(0, 0, 0, 0.3); padding: 30px; border-radius: 24px; border: 3px dashed var(--primary-color); margin: 25px 0; text-align: center; animation: pulseGlow 2s infinite ease-in-out; }
 
 @keyframes pulseGlow { 0%, 100% { transform: scale(1); text-shadow: 0 0 20px rgba(99, 102, 241, 0.6); opacity: 0.9; } 50% { transform: scale(1.03); text-shadow: 0 0 50px rgba(99, 102, 241, 1); opacity: 1; } }
@@ -253,7 +256,10 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     .profiles-container { gap: 15px; }
     .vs-text { font-size: 1.3rem; }
     .genre-option { font-size: 0.65rem; padding: 10px 0; }
-    .pu-btn { font-size: 0.65rem; padding: 8px; }
+    
+    /* FIX 4: Increased mobile touch targets for power-up buttons */
+    .pu-btn { font-size: 0.7rem; padding: 10px; min-height: 44px; }
+    
     #quiz-screen { height: auto; }
     
     .chat-container { height: 200px; }

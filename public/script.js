@@ -167,7 +167,6 @@ document.querySelectorAll('#host-genre .genre-option').forEach(option => {
     };
 });
 
-// NEW: Difficulty Click Handler
 document.querySelectorAll('#host-difficulty .genre-option').forEach(option => {
     option.onclick = (e) => {
         playSound(sfx.click);
@@ -181,7 +180,6 @@ document.getElementById('create-btn').onclick = () => {
     playSound(sfx.click);
     const n = document.getElementById('host-name').value || "Host";
     gameState.myName = n;
-    // UPDATED: Sends difficulty to the backend
     socket.emit('create-room', mySelectedAvatar, n, mySelectedGenre, mySelectedDifficulty);
 };
 
@@ -209,6 +207,21 @@ document.getElementById('join-btn').onclick = () => {
     gameState.myName = n;
     socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, n);
 };
+
+// --- FIX 1: Catch Ghost Joins / Invalid Rooms ---
+socket.on('join-error', (errorMessage) => {
+    showToast(`❌ ${errorMessage}`);
+    playSound(sfx.lose);
+});
+
+// --- FIX 2: Catch Opponent Disconnects ---
+socket.on('opponent-disconnected', () => {
+    showToast(`❌ Opponent disconnected! Returning to menu...`);
+    playSound(sfx.lose);
+    setTimeout(() => {
+        window.location.reload(); // Hard reset back to safety
+    }, 2500);
+});
 
 // --- CORE GAME LOOP ---
 socket.on('game-start', (players, genre, roomId, apiQuestions) => {
@@ -403,7 +416,6 @@ socket.on('round-results', (answers) => {
             const rb = document.createElement('div');
             rb.className = 'rematch-box';
             
-            // UPDATED: Dynamically generate BOTH Genre and Difficulty for the rematch panel!
             rb.innerHTML = `
                 <h3 style="margin-bottom: 15px;">Play Again?</h3>
                 <div class="genre-selector" id="rematch-genre" style="margin-bottom: 10px;"></div>
@@ -426,7 +438,6 @@ socket.on('round-results', (answers) => {
                 rgs.appendChild(p);
             });
 
-            // NEW: Building the Rematch Difficulty options
             const rdiff = document.getElementById('rematch-difficulty');
             let selDiff = "any";
             
@@ -440,7 +451,6 @@ socket.on('round-results', (answers) => {
                 rdiff.appendChild(p);
             });
             
-            // Send both selected Genre and Difficulty when host restarts
             document.getElementById('rematch-btn').onclick = () => {
                 playSound(sfx.click);
                 socket.emit('play-again', gameState.roomId, selGenre, selDiff);
