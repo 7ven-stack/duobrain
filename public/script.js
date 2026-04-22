@@ -129,6 +129,18 @@ function injectDailyGenres(containerId, isRematch = false) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // NEW: IN-APP BROWSER DETECTOR (Messenger, Facebook, Instagram, TikTok)
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isInAppBrowser = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Instagram") > -1) || (ua.indexOf("TikTok") > -1);
+    
+    if (isInAppBrowser) {
+        // Show the warning and completely hide the game so they don't play broken
+        document.getElementById('inapp-warning').classList.remove('hidden-element');
+        document.querySelector('.app-container').style.display = 'none';
+        return; // Stops all other JavaScript from loading
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) document.getElementById('room-input').value = roomParam;
