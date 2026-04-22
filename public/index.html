@@ -166,7 +166,11 @@
             <div class="chat-container">
                 <div id="chat-messages" class="chat-messages"></div>
                 <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                    <div class="input-with-emoji">
+                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                        <button id="emoji-btn" title="Add Emoji">🙂</button>
+                        <div id="emoji-picker" class="hidden-element"></div>
+                    </div>
                     <button id="send-chat-btn">Send</button>
                 </div>
             </div>

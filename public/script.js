@@ -543,6 +543,36 @@ socket.on('restart-game', (g, newQuestions) => {
 // --- CHAT SYSTEM ---
 const chatIn = document.getElementById('chat-input');
 const chatMsgs = document.getElementById('chat-messages');
+
+// NEW: Emoji Picker Logic
+const emojiBtn = document.getElementById('emoji-btn');
+const emojiPicker = document.getElementById('emoji-picker');
+const emojiList = ['😀','😂','🤣','😊','😍','😭','🥺','😎','🔥','👍','❤️','✨','💀','💯','🤔','🙌','👀','🤯','🎉','💪'];
+
+emojiList.forEach(emoji => {
+    const span = document.createElement('span');
+    span.className = 'emoji-item';
+    span.textContent = emoji;
+    span.onclick = () => {
+        playSound(sfx.click);
+        chatIn.value += emoji;
+        chatIn.focus();
+    };
+    emojiPicker.appendChild(span);
+});
+
+emojiBtn.onclick = (e) => {
+    e.stopPropagation();
+    playSound(sfx.click);
+    emojiPicker.classList.toggle('hidden-element');
+};
+
+document.addEventListener('click', (e) => {
+    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+        emojiPicker.classList.add('hidden-element');
+    }
+});
+
 function addMsg(n, t, me) {
     const d = document.createElement('div'); d.className = `chat-bubble ${me ? 'me' : 'them'}`;
     d.innerHTML = `<strong>${n}:</strong> ${t}`;

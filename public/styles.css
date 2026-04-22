@@ -106,7 +106,7 @@ body {
     width: 100%; 
     height: auto; 
     margin: auto; 
-    position: relative; /* <-- THIS KEEPS THE BUTTON INSIDE THE BOX */
+    position: relative;
 }
 
 #quiz-screen { height: auto; }
@@ -218,13 +218,22 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     scrollbar-color: var(--primary-color) transparent; 
 }
 
-.chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 18px; font-size: 0.85rem; line-height: 1.4; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+.chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 18px; font-size: 0.85rem; line-height: 1.4; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.2); overflow-wrap: break-word; word-break: break-word; }
 .chat-bubble.me { align-self: flex-end; background: linear-gradient(135deg, var(--primary-color), #818cf8); border-bottom-right-radius: 4px; }
 .chat-bubble.them { align-self: flex-start; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1); border-bottom-left-radius: 4px; }
 
-.chat-input-area { display: flex; padding: 12px; background: rgba(255, 255, 255, 0.03); border-top: 1px solid rgba(255, 255, 255, 0.05); gap: 10px; }
-#chat-input { margin-bottom: 0; text-align: left; padding: 12px 18px; font-size: 0.95rem; flex: 1; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; }
+/* NEW: Emoji UI Styling */
+.chat-input-area { display: flex; padding: 12px; background: rgba(255, 255, 255, 0.03); border-top: 1px solid rgba(255, 255, 255, 0.05); gap: 10px; align-items: stretch; }
+.input-with-emoji { position: relative; flex: 1; display: flex; }
+#chat-input { margin-bottom: 0; text-align: left; padding: 12px 45px 12px 18px; font-size: 0.95rem; flex: 1; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; width: 100%; }
 #chat-input:focus { border-color: var(--primary-color); box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); outline: none; }
+
+#emoji-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.7; transition: 0.2s; padding: 0; width: auto; box-shadow: none; }
+#emoji-btn:hover { opacity: 1; transform: translateY(-50%) scale(1.1); filter: brightness(1.2); }
+
+#emoji-picker { position: absolute; bottom: calc(100% + 10px); right: 0; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 200; }
+.emoji-item { font-size: 1.3rem; cursor: pointer; text-align: center; transition: 0.2s; user-select: none; }
+.emoji-item:hover { transform: scale(1.2); }
 
 #send-chat-btn { width: auto; padding: 0 25px; font-size: 0.85rem; background: var(--primary-color); border-radius: 12px; font-weight: 800; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
 #send-chat-btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
@@ -328,7 +337,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     .option-btn { padding: 12px; font-size: 0.9rem; }
     .winner-text { font-size: 2.2rem; }
 
-    /* Keep the help button snug inside the box on mobile */
     .help-btn { top: 10px; right: 10px; width: 35px; height: 35px; font-size: 1.2rem; }
     .modal-content { padding: 25px; }
 }
