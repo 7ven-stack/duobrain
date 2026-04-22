@@ -15,12 +15,15 @@ function generateRoomCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
+// NEW: Expanded Category Map with all 24 possible daily genres!
 const categoryMap = {
     science: 17, math: 19, music: 12, geography: 22, 
-    history: 23, movies: 11, gaming: 15, sports: 21, mythology: 20
+    history: 23, movies: 11, gaming: 15, sports: 21, mythology: 20,
+    computers: 18, anime: 31, books: 10, tv: 14, boardgames: 16,
+    comics: 29, gadgets: 30, art: 25, animals: 27,
+    general: 9, vehicles: 28, politics: 24, celebs: 26, theatre: 13, cartoons: 32
 };
 
-// --- Fallback Questions to prevent crashes ---
 function getFallbackQuestions() {
     return [
         { q: "API Rate Limit Hit! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1 },
@@ -160,15 +163,12 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('enemy-powerup', type, playerName);
     });
 
-    // --- FIX 2: Added Disconnect Logic for Host Abandonment ---
     socket.on('disconnect', () => {
         for (const roomId in rooms) {
             const room = rooms[roomId];
             const playerIndex = room.players.findIndex(p => p.id === socket.id);
             if (playerIndex !== -1) {
-                // Tell the remaining player their opponent left
                 socket.to(roomId).emit('opponent-disconnected');
-                // Erase the room from server memory
                 delete rooms[roomId];
                 break;
             }

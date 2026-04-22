@@ -34,15 +34,11 @@ body {
     margin: 0 auto;
 }
 
-/* =========================================================
-   HELP BUTTON & MODAL
-   ========================================================= */
-
 .help-btn { 
     position: absolute; top: 25px; right: 25px; 
-    width: 32px; height: 32px; border-radius: 50%; /* Changed from 45px */
+    width: 32px; height: 32px; border-radius: 50%; 
     background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
-    font-size: 1rem; font-weight: 800; color: white; /* Changed from 1.4rem */
+    font-size: 1rem; font-weight: 800; color: white; 
     display: flex; align-items: center; justify-content: center; 
     z-index: 100; transition: 0.3s; padding: 0; 
     box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
@@ -91,8 +87,6 @@ body {
 .rules-scroll::-webkit-scrollbar { width: 6px; } 
 .rules-scroll::-webkit-scrollbar-track { background: transparent; margin: 8px 0; } 
 .rules-scroll::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 10px; }
-
-/* ========================================================= */
 
 .card {
     background: var(--surface-color);
@@ -187,9 +181,8 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 .option-btn { width: 100%; padding: 18px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; font-size: 1rem; color: white; cursor: pointer; text-align: left; transition: 0.2s; margin-bottom: 0; height: 100%; }
 .option-btn:hover { border-color: var(--primary-color); background: rgba(99, 102, 241, 0.15); transform: translateY(-3px); }
 
-
 /* =========================================================
-   THE NEW PREMIUM CHAT UI 
+   CHAT UI & EMOJI PICKER
    ========================================================= */
 
 .chat-container { 
@@ -222,7 +215,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 .chat-bubble.me { align-self: flex-end; background: linear-gradient(135deg, var(--primary-color), #818cf8); border-bottom-right-radius: 4px; }
 .chat-bubble.them { align-self: flex-start; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1); border-bottom-left-radius: 4px; }
 
-/* NEW: Emoji UI Styling */
 .chat-input-area { display: flex; padding: 12px; background: rgba(255, 255, 255, 0.03); border-top: 1px solid rgba(255, 255, 255, 0.05); gap: 10px; align-items: stretch; }
 .input-with-emoji { position: relative; flex: 1; display: flex; }
 #chat-input { margin-bottom: 0; text-align: left; padding: 12px 45px 12px 18px; font-size: 0.95rem; flex: 1; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; width: 100%; }
@@ -309,9 +301,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 /* =========================================================
    MOBILE RESPONSIVENESS
    ========================================================= */
-/* =========================================================
-   MOBILE RESPONSIVENESS
-   ========================================================= */
 @media (max-width: 800px) {
     .app-container { max-width: 500px; padding: 20px 10px; justify-content: flex-start; }
     .card { padding: 25px 20px; border-radius: 24px; }
@@ -342,7 +331,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 
     .help-btn { top: 12px; right: 12px; width: 28px; height: 28px; font-size: 0.95rem; }
     
-    /* NEW: Shrink the Modal and its text for Mobile */
     .modal-content { padding: 20px; max-height: 80vh; }
     .modal-content h2 { font-size: 1.3rem !important; margin-bottom: 10px !important; }
     .close-btn { top: 10px; right: 15px; font-size: 1.8rem; }

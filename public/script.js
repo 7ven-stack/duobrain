@@ -70,12 +70,65 @@ const funFacts = [
 function setHourlyFunFact() {
     const display = document.getElementById('fun-fact-display');
     if (!display) return;
-    
     const now = new Date();
     const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
     const factIndex = uniqueHourCounter % funFacts.length;
-    
     display.innerHTML = funFacts[factIndex];
+}
+
+// SELECTION VARIABLES
+let mySelectedAvatar = "🦊"; 
+let mySelectedGenre = "science"; 
+let mySelectedDifficulty = "any";
+
+// --- ROTATING DAILY GENRE PACKS ---
+const genrePacks = [
+    ["science", "math", "music", "geography", "history", "movies", "gaming", "sports", "mythology"],
+    ["computers", "anime", "books", "tv", "boardgames", "comics", "gadgets", "art", "animals"],
+    ["general", "vehicles", "politics", "celebs", "theatre", "cartoons", "science", "geography", "music"] 
+];
+
+function injectDailyGenres(containerId, isRematch = false) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = ''; 
+
+    const now = new Date();
+
+    now.setDate(now.getDate() + 1);
+    
+    const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
+    
+    const activePack = genrePacks[daysSinceEpoch % genrePacks.length];
+
+    if (!isRematch) mySelectedGenre = activePack[0]; 
+    
+    let selGenreForRematch = isRematch ? gameState.genre : null;
+    
+    if (isRematch && !activePack.includes(selGenreForRematch)) {
+        selGenreForRematch = activePack[0];
+    }
+
+    activePack.forEach((g, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'genre-option';
+        
+        if (!isRematch && i === 0) btn.classList.add('selected');
+        if (isRematch && g === selGenreForRematch) btn.classList.add('selected');
+
+        btn.textContent = g === "tv" ? "TV" : g.charAt(0).toUpperCase() + g.slice(1);
+        btn.setAttribute('data-genre', g);
+
+        btn.onclick = (e) => {
+            playSound(sfx.click);
+            container.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
+            e.target.classList.add('selected');
+            if (!isRematch) mySelectedGenre = g;
+        };
+        container.appendChild(btn);
+    });
+
+    return selGenreForRematch; 
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -84,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (roomParam) document.getElementById('room-input').value = roomParam;
     
     setHourlyFunFact();
+    injectDailyGenres('host-genre');
 });
 
 const screens = { 
@@ -94,11 +148,6 @@ const screens = {
 };
 const timerDisplay = document.getElementById('timer-display');
 const optsContainer = document.getElementById('options-container');
-
-// SELECTION VARIABLES
-let mySelectedAvatar = "🦊"; 
-let mySelectedGenre = "science";
-let mySelectedDifficulty = "any";
 
 function switchScreen(screenToActivate) {
     Object.values(screens).forEach(s => s.classList.replace('active-screen', 'hidden-screen'));
@@ -205,15 +254,6 @@ document.querySelectorAll('.avatar-option').forEach(option => {
         parent.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
         e.target.classList.add('selected');
         mySelectedAvatar = e.target.getAttribute('data-avatar');
-    };
-});
-
-document.querySelectorAll('#host-genre .genre-option').forEach(option => {
-    option.onclick = (e) => {
-        playSound(sfx.click);
-        document.querySelectorAll('#host-genre .genre-option').forEach(opt => opt.classList.remove('selected'));
-        e.target.classList.add('selected');
-        mySelectedGenre = e.target.getAttribute('data-genre');
     };
 });
 
@@ -480,18 +520,7 @@ socket.on('round-results', (answers) => {
             `;
             optsContainer.appendChild(rb);
             
-            const rgs = document.getElementById('rematch-genre');
-            let selGenre = "science";
-            
-            ["science","math","music","geography","history","movies","gaming", "sports", "mythology"].forEach(k => {
-                const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = k; p.onclick = (e) => {
-                    playSound(sfx.click);
-                    rgs.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
-                    e.target.classList.add('selected'); selGenre = k;
-                };
-                if(k === 'science') p.classList.add('selected');
-                rgs.appendChild(p);
-            });
+            let selGenre = injectDailyGenres('rematch-genre', true);
 
             const rdiff = document.getElementById('rematch-difficulty');
             let selDiff = "any";
@@ -508,7 +537,9 @@ socket.on('round-results', (answers) => {
             
             document.getElementById('rematch-btn').onclick = () => {
                 playSound(sfx.click);
-                socket.emit('play-again', gameState.roomId, selGenre, selDiff);
+                const activeGenreBtn = document.querySelector('#rematch-genre .genre-option.selected');
+                const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
+                socket.emit('play-again', gameState.roomId, finalGenre, selDiff);
             };
         } else {
             const waitingBox = document.createElement('div');
@@ -531,7 +562,7 @@ socket.on('load-next-question', () => { gameState.currentQuestionIndex++; render
 
 socket.on('restart-game', (g, newQuestions) => { 
     resetPowerUps();
-    document.getElementById('help-btn').style.display = 'none'; // Ensure it stays hidden
+    document.getElementById('help-btn').style.display = 'none';
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
     document.getElementById('bg-video').classList.remove('sudden-death-bg');
     gameState.genre = g; gameState.questions = newQuestions;
@@ -544,7 +575,6 @@ socket.on('restart-game', (g, newQuestions) => {
 const chatIn = document.getElementById('chat-input');
 const chatMsgs = document.getElementById('chat-messages');
 
-// NEW: Emoji Picker Logic
 const emojiBtn = document.getElementById('emoji-btn');
 const emojiPicker = document.getElementById('emoji-picker');
 const emojiList = ['😀','😂','🤣','😊','😍','😭','🥺','😎','🔥','👍','❤️','✨','💀','💯','🤔','🙌','👀','🤯','🎉','💪'];
