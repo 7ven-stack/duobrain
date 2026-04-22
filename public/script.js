@@ -28,7 +28,6 @@ function playSound(audioObj) {
     if (playPromise !== undefined) playPromise.catch(e => console.warn("Audio blocked"));
 }
 
-// --- NEW FIX: Stop Sound Helper ---
 function stopSound(audioObj) {
     if (!audioObj) return;
     audioObj.pause();
@@ -62,10 +61,10 @@ const funFacts = [
     "A day on Venus is actually longer than a year on Venus.",
     "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
     "Lightning strikes the Earth about 100 times every single second.",
-    " Sharks have been around for over 400 million years, meaning they existed before trees.",
-    " The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
-    " Ice is technically classified as a mineral.",
-    " Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
+    "Sharks have been around for over 400 million years, meaning they existed before trees.",
+    "The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
+    "Ice is technically classified as a mineral.",
+    "Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
 ];
 
 function setHourlyFunFact() {
@@ -106,6 +105,23 @@ function switchScreen(screenToActivate) {
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
 }
 
+// --- RULES MODAL LOGIC ---
+const rulesModal = document.getElementById('rules-modal');
+document.getElementById('help-btn').onclick = () => {
+    playSound(sfx.click);
+    rulesModal.classList.remove('hidden-element');
+};
+document.getElementById('close-rules-btn').onclick = () => {
+    playSound(sfx.click);
+    rulesModal.classList.add('hidden-element');
+};
+rulesModal.onclick = (e) => {
+    if (e.target === rulesModal) {
+        playSound(sfx.click);
+        rulesModal.classList.add('hidden-element');
+    }
+};
+
 // --- POWER-UPS LOGIC ---
 function resetPowerUps() {
     powerUps = { fifty: false, freeze: false, jammer: false };
@@ -116,7 +132,7 @@ function resetPowerUps() {
 document.getElementById('pu-5050').onclick = function() {
     if (powerUps.fifty || gameState.currentQuestionIndex >= 6) return;
     powerUps.fifty = true; this.classList.add('used'); playSound(sfx.click);
-    showToast("🪄 You activated 50/50!");
+    showToast("🔓 You activated Decrypt!");
     socket.emit('trigger-powerup', gameState.roomId, '5050', gameState.myName);
 
     const correctIdx = gameState.questions[gameState.currentQuestionIndex].answer;
@@ -133,7 +149,7 @@ document.getElementById('pu-freeze').onclick = function() {
     if (powerUps.freeze || gameState.currentQuestionIndex >= 6) return;
     powerUps.freeze = true; this.classList.add('used'); playSound(sfx.click);
     
-    showToast("❄️ You activated FREEZE!");
+    showToast("⚡ You activated OVERCLOCK!");
     socket.emit('trigger-powerup', gameState.roomId, 'freeze', gameState.myName);
     
     timeLeft += 8; 
@@ -152,22 +168,22 @@ document.getElementById('pu-freeze').onclick = function() {
 document.getElementById('pu-jammer').onclick = function() {
     if (powerUps.jammer || gameState.currentQuestionIndex >= 6) return;
     powerUps.jammer = true; this.classList.add('used'); playSound(sfx.click);
-    showToast("🦑 You jammed their screen!");
+    showToast("👾 You glitched their screen!");
     socket.emit('trigger-powerup', gameState.roomId, 'jammer', gameState.myName);
 };
 
 socket.on('enemy-powerup', (type, enemyName) => {
-    if(type === '5050') showToast(`🪄 <strong>${enemyName}</strong> used 50/50!`);
+    if(type === '5050') showToast(`🔓 <strong>${enemyName}</strong> used Decrypt!`);
     
     if(type === 'freeze') {
-        showToast(`❄️ <strong>${enemyName}</strong> froze their timer!`);
+        showToast(`⚡ <strong>${enemyName}</strong> overclocked their timer!`);
         timerDisplay.classList.remove('ice-flash');
         void timerDisplay.offsetWidth; 
         timerDisplay.classList.add('ice-flash');
     }
     
     if(type === 'jammer') {
-        showToast(`🦑 <strong>${enemyName}</strong> jammed your screen!`);
+        showToast(`👾 <strong>${enemyName}</strong> glitched your screen!`);
         playSound(sfx.lose); 
         optsContainer.classList.add('jammed-state');
         
@@ -258,6 +274,7 @@ socket.on('opponent-disconnected', () => {
 // --- CORE GAME LOOP ---
 socket.on('game-start', (players, genre, roomId, apiQuestions) => {
     resetPowerUps(); 
+    document.getElementById('help-btn').style.display = 'none'; 
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
     document.getElementById('bg-video').classList.remove('sudden-death-bg'); 
     
@@ -295,7 +312,6 @@ function startCountdownSequence() {
 }
 
 function renderQuestion() {
-    // FIX IMPLEMENTATION: Make absolutely sure the tick is stopped at the start of a new question
     stopSound(sfx.tick);
     
     optsContainer.classList.remove('jammed-state'); 
@@ -331,7 +347,6 @@ function renderQuestion() {
 
         if (timeLeft <= 0) {
             clearInterval(questionTimer);
-            // FIX IMPLEMENTATION: Stop the tick sound immediately when time runs out
             stopSound(sfx.tick); 
             socket.emit('submit-answer', gameState.roomId, -1, 0);
             optsContainer.innerHTML = `<h3 style="margin-top:10px; text-align: center; color: #ef4444; grid-column: 1 / -1;">Time's Up!</h3>`;
@@ -344,7 +359,6 @@ function renderQuestion() {
         btn.onclick = () => {
             playSound(sfx.click); 
             clearInterval(questionTimer);
-            // FIX IMPLEMENTATION: Stop the tick sound immediately when an answer is locked in
             stopSound(sfx.tick);
             socket.emit('submit-answer', gameState.roomId, i, timeLeft);
             optsContainer.innerHTML = `<h3 style="margin-top:10px; color:var(--primary-color); text-align: center; grid-column: 1 / -1;">Answer Locked In</h3>`;
@@ -355,7 +369,6 @@ function renderQuestion() {
 
 socket.on('round-results', (answers) => {
     clearInterval(questionTimer);
-    // FIX IMPLEMENTATION: Final safety net to kill the tick sound when results arrive
     stopSound(sfx.tick);
     
     timerDisplay.classList.add('hidden-element');
@@ -518,6 +531,7 @@ socket.on('load-next-question', () => { gameState.currentQuestionIndex++; render
 
 socket.on('restart-game', (g, newQuestions) => { 
     resetPowerUps();
+    document.getElementById('help-btn').style.display = 'none'; // Ensure it stays hidden
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
     document.getElementById('bg-video').classList.remove('sudden-death-bg');
     gameState.genre = g; gameState.questions = newQuestions;

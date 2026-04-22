@@ -34,6 +34,66 @@ body {
     margin: 0 auto;
 }
 
+/* =========================================================
+   HELP BUTTON & MODAL
+   ========================================================= */
+
+.help-btn { 
+    position: absolute; top: 25px; right: 25px; 
+    width: 45px; height: 45px; border-radius: 50%; 
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+    font-size: 1.4rem; font-weight: 800; color: white; 
+    display: flex; align-items: center; justify-content: center; 
+    z-index: 100; transition: 0.3s; padding: 0; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+}
+.help-btn:hover { 
+    background: var(--primary-color); border-color: var(--primary-color); 
+    transform: translateY(-2px); box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4); 
+}
+
+.modal { 
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+    background: rgba(0,0,0,0.7); z-index: 1000; 
+    display: flex; justify-content: center; align-items: center; 
+    backdrop-filter: blur(5px); 
+}
+.modal.hidden-element { display: none !important; }
+
+.modal-content { 
+    max-width: 600px; width: 90%; max-height: 85vh; 
+    overflow: hidden; display: flex; flex-direction: column; 
+    position: relative; padding: 40px; margin: auto;
+}
+
+.close-btn { 
+    position: absolute; top: 15px; right: 20px; background: transparent; 
+    border: none; color: var(--text-muted); font-size: 2.2rem; 
+    padding: 0; width: auto; box-shadow: none; line-height: 1; 
+    cursor: pointer; transition: 0.2s; 
+}
+.close-btn:hover { color: #ef4444; transform: scale(1.1); filter: none; background: transparent;}
+
+.rules-scroll { 
+    overflow-y: auto; padding-right: 15px; text-align: left; 
+    scrollbar-width: thin; scrollbar-color: var(--primary-color) transparent; 
+}
+.rules-scroll h3 { color: #cbd5e1; font-size: 1.1rem; margin: 20px 0 10px 0; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }
+.rules-scroll p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 10px; }
+.rules-scroll ul { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.rules-scroll li { 
+    font-size: 0.9rem; color: #cbd5e1; display: flex; flex-direction: column; 
+    gap: 4px; padding: 12px 15px; background: rgba(255,255,255,0.03); 
+    border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); line-height: 1.5;
+}
+.rules-scroll li strong { color: var(--primary-color); font-size: 1rem; margin-bottom: 2px;}
+
+.rules-scroll::-webkit-scrollbar { width: 6px; } 
+.rules-scroll::-webkit-scrollbar-track { background: transparent; margin: 8px 0; } 
+.rules-scroll::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 10px; }
+
+/* ========================================================= */
+
 .card {
     background: var(--surface-color);
     backdrop-filter: blur(20px) saturate(180%);
@@ -46,6 +106,7 @@ body {
     width: 100%; 
     height: auto; 
     margin: auto; 
+    position: relative; /* <-- THIS KEEPS THE BUTTON INSIDE THE BOX */
 }
 
 #quiz-screen { height: auto; }
@@ -68,7 +129,6 @@ h1 { font-weight: 800; font-size: 2.5rem; margin-bottom: 5px; letter-spacing: -1
 
 input { width: 100%; padding: 16px; margin-bottom: 20px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.3); color: white; font-size: 1.05rem; outline: none; text-align: center; }
 
-/* FIX 5: Force the room code input field to visually display in uppercase */
 #room-input { text-transform: uppercase; }
 
 .massive-code { font-size: 5rem; font-weight: 800; letter-spacing: 15px; color: var(--primary-color); text-shadow: 0 0 30px rgba(99, 102, 241, 0.8); background: rgba(0, 0, 0, 0.3); padding: 30px; border-radius: 24px; border: 3px dashed var(--primary-color); margin: 25px 0; text-align: center; animation: pulseGlow 2s infinite ease-in-out; }
@@ -257,7 +317,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     .vs-text { font-size: 1.3rem; }
     .genre-option { font-size: 0.65rem; padding: 10px 0; }
     
-    /* FIX 4: Increased mobile touch targets for power-up buttons */
     .pu-btn { font-size: 0.7rem; padding: 10px; min-height: 44px; }
     
     #quiz-screen { height: auto; }
@@ -268,4 +327,8 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     #question-text { font-size: 1.1rem; margin-bottom: 10px; }
     .option-btn { padding: 12px; font-size: 0.9rem; }
     .winner-text { font-size: 2.2rem; }
+
+    /* Keep the help button snug inside the box on mobile */
+    .help-btn { top: 10px; right: 10px; width: 35px; height: 35px; font-size: 1.2rem; }
+    .modal-content { padding: 25px; }
 }

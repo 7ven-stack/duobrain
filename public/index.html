@@ -13,16 +13,40 @@
 
     <div id="jammer-vignette" class="vignette-overlay"></div>
     <div id="freeze-overlay" class="freeze-overlay"></div>
-
     <div id="toast-container" class="toast-container"></div>
 
     <video autoplay muted loop id="bg-video">
         <source src="calm-space-constellations-moewalls-com.mp4" type="video/mp4">
     </video>
 
+    <div id="rules-modal" class="modal hidden-element">
+        <div class="modal-content card active-screen">
+            <button id="close-rules-btn" class="close-btn" title="Close">&times;</button>
+            <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
+            
+            <div class="rules-scroll">
+                <h3>The Basics</h3>
+                <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. The first to answer correctly wins the round's point!</p>
+                
+                <h3>Tie-Breakers & Sudden Death</h3>
+                <p>If both players answer correctly, the player who answered <strong>fastest</strong> gets the point. Round 6 is always Sudden Death—the pressure is doubled with only 7 seconds on the clock!</p>
+                
+                <h3>Power-Ups</h3>
+                <p>You can use each power-up exactly once per match. Use them strategically to disrupt your opponent or save yourself!</p>
+                <ul>
+                    <li><strong>Decrypt:</strong> Instantly removes two incorrect answers from your screen.</li>
+                    <li><strong>Overclock:</strong> Adds 8 seconds to your timer, buying you more time to think.</li>
+                    <li><strong>Glitch:</strong> Blurs your opponent's screen and shakes their answers, causing chaos!</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <main class="app-container">
         
         <section id="menu-screen" class="card active-screen">
+            <button id="help-btn" class="help-btn" title="How to Play">?</button>
+            
             <h1>DuoBrain <span class="badge">LIVE</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
             
@@ -127,9 +151,9 @@
             </div>
 
             <div class="powerups-panel" id="powerups-ui">
-                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers">🪄 50/50</button>
-                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds">❄️ Freeze</button>
-                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen">🦑 Jammer</button>
+                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers">Decrypt</button>
+                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds">Overclock</button>
+                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen">Glitch</button>
             </div>
             
             <div class="quiz-scroll-content">
