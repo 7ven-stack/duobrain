@@ -20,6 +20,7 @@ const categoryMap = {
     history: 23, movies: 11, gaming: 15, sports: 21, mythology: 20
 };
 
+// --- Fallback Questions to prevent crashes ---
 function getFallbackQuestions() {
     return [
         { q: "API Rate Limit Hit! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1 },
@@ -31,17 +32,42 @@ function getFallbackQuestions() {
     ];
 }
 
-async function fetchQuestionsFromAPI(genre, difficulty = 'any') {
+// Helper function to let the server pause for a few seconds
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- UPDATED: API Fetcher with Auto-Retry and Difficulty ---
+async function fetchQuestionsFromAPI(genre, difficulty = 'any', retries = 2) {
     const categoryId = categoryMap[genre] || 9; 
     const diffParam = difficulty !== 'any' ? `&difficulty=${difficulty}` : '';
     const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple`;
 
     try {
         const response = await fetch(url);
+
+        // HTTP 429 means "Too Many Requests"
+        if (response.status === 429 && retries > 0) {
+            console.log("⏳ API rate limited! Waiting 3 seconds to retry...");
+            await delay(3000);
+            return await fetchQuestionsFromAPI(genre, difficulty, retries - 1);
+        }
+
         const data = await response.json();
 
+        // OpenTDB Code 5 also means "Rate Limit Hit"
+        if (data.response_code === 5 && retries > 0) {
+            console.log("⏳ OpenTDB rate limit hit! Waiting 3 seconds to retry...");
+            await delay(3000);
+            return await fetchQuestionsFromAPI(genre, difficulty, retries - 1);
+        }
+
+        // Code 1 means not enough questions exist in that specific category/difficulty
+        if (data.response_code === 1) {
+            console.warn(`⚠️ Not enough "${difficulty}" questions for ${genre}. Loading fallback...`);
+            return getFallbackQuestions();
+        }
+
+        // General failure catch
         if (!data.results || data.response_code !== 0) {
-            console.warn(`⚠️ API Issue (Code: ${data.response_code}). Loading fallback questions...`);
             return getFallbackQuestions();
         }
 
