@@ -32,41 +32,59 @@ function getFallbackQuestions() {
     ];
 }
 
-// Helper function to let the server pause for a few seconds
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- UPDATED: API Fetcher with Auto-Retry and Difficulty ---
-async function fetchQuestionsFromAPI(genre, difficulty = 'any', retries = 2) {
+// --- NEW: Session Token Fetcher ---
+async function getSessionToken() {
+    try {
+        const res = await fetch('https://opentdb.com/api_token.php?command=request');
+        const data = await res.json();
+        if (data.response_code === 0) return data.token;
+    } catch (err) {
+        console.error("Failed to fetch token:", err);
+    }
+    return null;
+}
+
+// --- UPDATED: API Fetcher now uses the Session Token ---
+async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, retries = 2) {
     const categoryId = categoryMap[genre] || 9; 
     const diffParam = difficulty !== 'any' ? `&difficulty=${difficulty}` : '';
-    const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple`;
+    
+    // Dynamically append the token if the room has one
+    const tokenParam = token ? `&token=${token}` : '';
+    const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple${tokenParam}`;
 
     try {
         const response = await fetch(url);
 
-        // HTTP 429 means "Too Many Requests"
         if (response.status === 429 && retries > 0) {
             console.log("⏳ API rate limited! Waiting 3 seconds to retry...");
             await delay(3000);
-            return await fetchQuestionsFromAPI(genre, difficulty, retries - 1);
+            return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
         }
 
         const data = await response.json();
 
-        // OpenTDB Code 5 also means "Rate Limit Hit"
         if (data.response_code === 5 && retries > 0) {
             console.log("⏳ OpenTDB rate limit hit! Waiting 3 seconds to retry...");
             await delay(3000);
-            return await fetchQuestionsFromAPI(genre, difficulty, retries - 1);
+            return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
         }
 
-        // Code 1 means not enough questions exist in that specific category/difficulty
+        // Code 4 means the token has seen every possible question in this category
+        if (data.response_code === 4 && token) {
+            console.log("🔄 Token exhausted! Resetting memory...");
+            await fetch(`https://opentdb.com/api_token.php?command=reset&token=${token}`);
+            // Retry the exact same request now that the deck is shuffled
+            return await fetchQuestionsFromAPI(genre, difficulty, token, retries);
+        }
+
         if (data.response_code === 1) {
             console.warn(`⚠️ Not enough "${difficulty}" questions for ${genre}. Loading fallback...`);
             return getFallbackQuestions();
         }
 
-        // General failure catch
         if (!data.results || data.response_code !== 0) {
             return getFallbackQuestions();
         }
@@ -90,11 +108,19 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', retries = 2) {
 
 io.on('connection', (socket) => {
     
+    // UPDATED: Grab a token when a room is created
     socket.on('create-room', async (avatar, playerName, genre, difficulty) => {
         const roomId = generateRoomCode();
-        const liveQuestions = await fetchQuestionsFromAPI(genre, difficulty);
         
-        rooms[roomId] = { players: [], genre: genre, difficulty: difficulty, answers: {}, questions: liveQuestions };
+        // Ask OpenTDB for a memory tracker for this specific lobby
+        const roomToken = await getSessionToken(); 
+        const liveQuestions = await fetchQuestionsFromAPI(genre, difficulty, roomToken);
+        
+        rooms[roomId] = { 
+            players: [], genre: genre, difficulty: difficulty, 
+            answers: {}, questions: liveQuestions, token: roomToken 
+        };
+        
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, avatar, name: playerName, role: 'host' });
         socket.emit('room-created', roomId);
@@ -126,13 +152,14 @@ io.on('connection', (socket) => {
 
     socket.on('next-question', (roomId) => io.to(roomId).emit('load-next-question'));
 
+    // UPDATED: Pass the token when rematching so OpenTDB remembers what you've played
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
         const room = rooms[roomId];
         if (room) {
             room.genre = newGenre; 
             room.difficulty = newDifficulty;
             room.answers = {};
-            room.questions = await fetchQuestionsFromAPI(newGenre, newDifficulty);
+            room.questions = await fetchQuestionsFromAPI(newGenre, newDifficulty, room.token);
             io.to(roomId).emit('restart-game', newGenre, room.questions);
         }
     });
@@ -142,7 +169,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- CLOUD DEPLOYMENT FIX ---
-// The cloud provider will automatically set process.env.PORT
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
