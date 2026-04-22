@@ -220,8 +220,12 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 #chat-input { margin-bottom: 0; text-align: left; padding: 12px 45px 12px 18px; font-size: 0.95rem; flex: 1; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; width: 100%; }
 #chat-input:focus { border-color: var(--primary-color); box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); outline: none; }
 
-#emoji-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.7; transition: 0.2s; padding: 0; width: auto; box-shadow: none; }
-#emoji-btn:hover { opacity: 1; transform: translateY(-50%) scale(1.1); filter: brightness(1.2); }
+/* NEW: Styles the transparent button that holds your PNG */
+#emoji-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; width: auto; box-shadow: none; display: flex; align-items: center; justify-content: center; }
+
+/* NEW: Inverts your black happy.png into a soft grey, and makes it pure white on hover */
+.custom-emoji-icon { width: 22px; height: 22px; pointer-events: none; filter: invert(0.65); transition: 0.2s; }
+#emoji-btn:hover .custom-emoji-icon { filter: invert(1); transform: scale(1.1); }
 
 #emoji-picker { position: absolute; bottom: calc(100% + 10px); right: 0; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 200; }
 .emoji-item { font-size: 1.3rem; cursor: pointer; text-align: center; transition: 0.2s; user-select: none; }
