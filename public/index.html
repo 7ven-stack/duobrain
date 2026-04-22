@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DuoBrain</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+    <div id="jammer-vignette" class="vignette-overlay"></div>
+    <div id="freeze-overlay" class="freeze-overlay"></div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <video autoplay muted loop id="bg-video">
+        <source src="calm-space-constellations-moewalls-com.mp4" type="video/mp4">
+    </video>
+
+    <main class="app-container">
+        
+        <section id="menu-screen" class="card active-screen">
+            <h1>DuoBrain <span class="badge">LIVE</span></h1>
+            <p class="subtitle">Online 1v1 Trivia</p>
+            
+            <div class="split-layout">
+                <div class="panel">
+                    <h3>Host a Game</h3>
+                    <input type="text" id="host-name" placeholder="Your Name">
+                    <div class="avatar-selector">
+                        <div class="avatar-option selected" data-avatar="🦊">🦊</div>
+                        <div class="avatar-option" data-avatar="🐼">🐼</div>
+                        <div class="avatar-option" data-avatar="🐯">🐯</div>
+                        <div class="avatar-option" data-avatar="🐸">🐸</div>
+                    </div>
+                    
+                    <div class="genre-selector" id="host-genre" style="margin-bottom: 10px;">
+                        <div class="genre-option selected" data-genre="science">Science</div>
+                        <div class="genre-option" data-genre="math">Math</div>
+                        <div class="genre-option" data-genre="music">Music</div>
+                        <div class="genre-option" data-genre="geography">Geography</div>
+                        <div class="genre-option" data-genre="history">History</div>
+                        <div class="genre-option" data-genre="movies">Movies</div>
+                        <div class="genre-option" data-genre="gaming">Gaming</div>
+                        <div class="genre-option" data-genre="sports">Sports</div>
+                        <div class="genre-option" data-genre="mythology">Mythology</div>
+                    </div>
+
+                    <h4 style="margin: 10px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
+                    <div class="genre-selector" id="host-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
+                        <div class="genre-option selected" data-difficulty="any">Any</div>
+                        <div class="genre-option" data-difficulty="easy">Easy</div>
+                        <div class="genre-option" data-difficulty="medium">Med</div>
+                        <div class="genre-option" data-difficulty="hard">Hard</div>
+                    </div>
+
+                    <button id="create-btn" class="primary-btn">Create Room</button>
+                </div>
+                <div class="divider">OR</div>
+                <div class="panel">
+                    <h3>Join a Game</h3>
+                    <input type="text" id="guest-name" placeholder="Your Name">
+                    <div class="avatar-selector">
+                        <div class="avatar-option selected" data-avatar="🦊">🦊</div>
+                        <div class="avatar-option" data-avatar="🐼">🐼</div>
+                        <div class="avatar-option" data-avatar="🐯">🐯</div>
+                        <div class="avatar-option" data-avatar="🐸">🐸</div>
+                    </div>
+                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4">
+                    <button id="join-btn" class="secondary-btn">Join Room</button>
+
+                    <div class="quick-rules">
+                        <h4>Tips</h4>
+                        <ul>
+                            <li><span>⚡</span> Answer fast for Tie-Breakers</li>
+                            <li><span>🦑</span> Jammer blurs their screen</li>
+                            <li><span>🏆</span> Host picks the categories</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <p id="error-msg" class="error-text"></p>
+        </section>
+
+        <section id="lobby-screen" class="card hidden-screen" style="text-align: center;">
+            <h2>Waiting for Opponent</h2>
+            <p class="subtitle">Send this code to your friend:</p>
+            <div id="room-code-display" class="massive-code">----</div>
+            <button id="copy-link-btn" class="secondary-btn" style="max-width: 300px; margin: 0 auto;">🔗 Copy Invite Link</button>
+        </section>
+
+        <section id="countdown-screen" class="card hidden-screen" style="text-align: center; justify-content: center;">
+            <p style="font-size: 1.5rem; color: var(--text-muted); font-weight: 800; letter-spacing: 5px; text-transform: uppercase; margin-bottom: 10px;">Match Found</p>
+            <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); text-shadow: 0 0 40px rgba(99, 102, 241, 0.8); margin: 0;">3</h2>
+        </section>
+
+        <section id="quiz-screen" class="card hidden-screen quiz-layout">
+            <div class="quiz-fixed-header">
+                <div class="profiles-container">
+                    <div class="profile-card">
+                        <div id="my-avatar-display" class="avatar-large">🦊</div>
+                        <span id="my-label" class="profile-name">You</span>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <h2 class="vs-text">VS</h2>
+                        <div class="series-badge" id="series-score-display">Series: 0 - 0</div>
+                    </div>
+
+                    <div class="profile-card">
+                        <div id="remote-avatar-display" class="avatar-large">🐼</div>
+                        <span id="remote-label" class="profile-name">Opponent</span>
+                    </div>
+                </div>
+
+                <header class="quiz-header">
+                    <div class="score-board">
+                        <span id="p1-score-display">Me: 0</span>
+                        <span id="p2-score-display">Opponent: 0</span>
+                    </div>
+                    <div class="header-controls">
+                        <div id="timer-display" class="timer-badge hidden-element">20s</div>
+                        <div id="turn-indicator" class="turn-badge">Syncing</div>
+                    </div>
+                </header>
+            </div>
+
+            <div class="powerups-panel" id="powerups-ui">
+                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers">🪄 50/50</button>
+                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds">❄️ Freeze</button>
+                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen">🦑 Jammer</button>
+            </div>
+            
+            <div class="quiz-scroll-content">
+                <div class="question-container">
+                    <h2 id="question-text">Loading match...</h2>
+                    <div id="options-container" class="options-grid"></div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                    <button id="send-chat-btn">Send</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
