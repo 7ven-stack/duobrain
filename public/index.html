@@ -15,26 +15,29 @@
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
-        #global-logo {
-    position: fixed;
-    top: 25px;
-    left: 30px;
-    width: 38px;
-    height: auto;
-    z-index: 100;
-    filter: drop-shadow(0 0 15px rgba(250, 204, 21, 0.4));
-    cursor: pointer; /* Makes it clickable! */
-    transition: opacity 0.3s ease, transform 0.2s ease;
-}
-
-#global-logo:hover {
-    transform: scale(1.1); /* Fun little hover animation */
-}
+        #global-footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            margin: 0 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+        
+        #global-footer a:hover {
+            color: white;
+            text-shadow: 0 0 10px rgba(99, 102, 241, 0.8);
+        }
+        
+        @media (max-width: 768px) {
+            #global-footer {
+                padding-bottom: 10px !important;
+            }
+        }
     </style>
 </head>
 <body>
-
-    <img src="icon-512.png" id="global-logo" alt="DuoBrain Logo">
 
     <div id="jammer-vignette" class="vignette-overlay"></div>
     <div id="freeze-overlay" class="freeze-overlay"></div>
@@ -73,7 +76,7 @@
         </div>
     </div>
 
-   <div id="rules-modal" class="modal hidden-element">
+    <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
             <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">&times;</button>
             <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
@@ -97,7 +100,7 @@
             </div>
         </div>
     </div>
-
+    
     <main class="app-container">
         
         <section id="menu-screen" class="card active-screen">
@@ -276,6 +279,14 @@
             </div>
         </section>
     </main>
+
+    <footer id="global-footer" style="position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; padding: 20px 0 15px; background: linear-gradient(to top, rgba(15, 23, 42, 0.95), transparent); color: rgba(203, 213, 225, 0.5); font-size: 0.75rem; z-index: 50; transition: opacity 0.3s ease;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; letter-spacing: 0.5px;">© 2026 DuoBrain Multiplayer Trivia. All rights reserved.</p>
+        <div style="pointer-events: auto;">
+            <a href="#" onclick="document.getElementById('help-btn').click(); return false;">Rules</a>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+    </footer>
 
     <script src="script.js"></script>
 

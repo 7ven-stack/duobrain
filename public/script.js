@@ -19,8 +19,6 @@ let pausedRemainingMs = 0;
 let tickSoundPlayedForSecond = -1; 
 let powerUps = { fifty: false, freeze: false, jammer: false };
 let isWaitingForOpponent = false; 
-
-// NEW: Tells the game if it's safe for the opponent to leave without triggering a penalty
 let isMatchFinished = false; 
 
 let pauseTimerInterval = null;
@@ -409,7 +407,6 @@ socket.on('join-error', (errorMessage) => {
     playSound(sfx.lose);
 });
 
-// FIX: Opponent disconnect logic is now smart enough to not trigger if the match is already over!
 socket.on('opponent-disconnected', () => {
     if (isMatchFinished) {
         showToast(`Opponent left the room.`);
@@ -423,7 +420,7 @@ socket.on('opponent-disconnected', () => {
 
 socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
     resetPowerUps(); 
-    isMatchFinished = false; // Reset the flag when a new game starts
+    isMatchFinished = false;
     document.getElementById('help-btn').style.display = 'none'; 
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
     document.getElementById('bg-video').classList.remove('sudden-death-bg'); 
@@ -575,7 +572,7 @@ socket.on('round-results', (answers, correctAns) => {
         }
     } else {
         
-        isMatchFinished = true; // FIX: Lock the match as finished!
+        isMatchFinished = true;
         if (socket) socket.emit('match-finished', gameState.roomId);
 
         document.getElementById('powerups-ui').style.display = 'none'; 
@@ -912,44 +909,24 @@ const screens = {
 const timerDisplay = document.getElementById('timer-display');
 const optsContainer = document.getElementById('options-container');
 
-// FIX: Logo now successfully hides itself alongside the footer during matches to prevent overlapping!
+// FIX: Just controls the footer now
 function switchScreen(screenToActivate) {
     Object.values(screens).forEach(s => s.classList.replace('active-screen', 'hidden-screen'));
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
     
     const footer = document.getElementById('global-footer');
-    const logo = document.getElementById('global-logo');
     
     if (screenToActivate === screens.menu || screenToActivate === screens.lobby) {
         if (footer) {
             footer.style.opacity = '1';
             footer.style.pointerEvents = 'auto';
         }
-        if (logo) {
-            logo.style.opacity = '1';
-            logo.style.pointerEvents = 'auto';
-        }
     } else {
         if (footer) {
             footer.style.opacity = '0';
             footer.style.pointerEvents = 'none';
         }
-        if (logo) {
-            logo.style.opacity = '0';
-            logo.style.pointerEvents = 'none';
-        }
     }
-}
-
-// --- GLOBAL LOGO HOME BUTTON ---
-const globalLogo = document.getElementById('global-logo');
-if (globalLogo) {
-    globalLogo.onclick = () => {
-        if (screens.menu.classList.contains('active-screen')) return;
-        playSound(sfx.click);
-        if (socket) socket.disconnect();
-        setTimeout(() => window.location.reload(), 150);
-    };
 }
 
 // --- RULES MODAL LOGIC ---
