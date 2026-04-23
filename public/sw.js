@@ -1,4 +1,4 @@
-const CACHE_NAME = 'duobrain-cache-v2'; // Bumped version to force update
+const CACHE_NAME = 'duobrain-cache-v3';
 const urlsToCache = [
     '/',
     '/index.html',

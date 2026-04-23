@@ -13,8 +13,28 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        #global-logo {
+    position: fixed;
+    top: 25px;
+    left: 30px;
+    width: 38px;
+    height: auto;
+    z-index: 100;
+    filter: drop-shadow(0 0 15px rgba(250, 204, 21, 0.4));
+    cursor: pointer; /* Makes it clickable! */
+    transition: opacity 0.3s ease, transform 0.2s ease;
+}
+
+#global-logo:hover {
+    transform: scale(1.1); /* Fun little hover animation */
+}
+    </style>
 </head>
 <body>
+
+    <img src="icon-512.png" id="global-logo" alt="DuoBrain Logo">
 
     <div id="jammer-vignette" class="vignette-overlay"></div>
     <div id="freeze-overlay" class="freeze-overlay"></div>
@@ -53,15 +73,20 @@
         </div>
     </div>
 
-    <div id="rules-modal" class="modal hidden-element">
+   <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
             <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">&times;</button>
             <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
             <div class="rules-scroll">
                 <h3>The Basics</h3>
-                <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. The first to answer correctly wins the round's point!</p>
-                <h3>Tie-Breakers & Sudden Death</h3>
-                <p>If both players answer correctly, the player who answered <strong>fastest</strong> gets the point. Round 6 is always Sudden Death—the pressure is doubled with only 7 seconds on the clock!</p>
+                <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. Answer correctly to earn a point!</p>
+                
+                <h3>Wager Phase Round</h3>
+                <p>Before Round 5 begins, you will see the category and must bet <strong>1, 2, or 3 points</strong>. Answer correctly to win those points, but guess wrong and you lose them! This is your chance for a massive comeback.</p>
+
+                <h3>Sudden Death Round</h3>
+                <p>The final round is Sudden Death! The pressure is doubled with only 7 seconds on the clock. If both players answer correctly, the player who answered <strong>fastest</strong> steals the point.</p>
+                
                 <h3>Power-Ups</h3>
                 <p>You can use each power-up exactly once per match. Use them strategically to disrupt your opponent or save yourself!</p>
                 <ul>
@@ -93,19 +118,30 @@
                         <div class="avatar-option" data-avatar="🐸" aria-label="Frog Avatar" role="button" tabindex="0">🐸</div>
                     </div>
                     
-                    <div class="genre-selector" id="host-genre" style="margin-bottom: 10px;"></div>
-
-                    <h4 style="margin: 10px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
-                    <div class="genre-selector" id="host-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
-                        <div class="genre-option selected" data-difficulty="any" aria-label="Any Difficulty" role="button" tabindex="0">Any</div>
-                        <div class="genre-option" data-difficulty="easy" aria-label="Easy Difficulty" role="button" tabindex="0">Easy</div>
-                        <div class="genre-option" data-difficulty="medium" aria-label="Medium Difficulty" role="button" tabindex="0">Med</div>
-                        <div class="genre-option" data-difficulty="hard" aria-label="Hard Difficulty" role="button" tabindex="0">Hard</div>
+                    <div style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 11px 10px; margin-bottom: 20px;">
+                        <div style="text-align: center;">
+                            <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Online Players</p>
+                            <p id="stat-online" style="font-size: 1.1rem; color: #10b981; font-weight: 800; margin: 0;">1</p>
+                        </div>
+                        <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
+                        <div style="text-align: center;">
+                            <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Active Matches</p>
+                            <p id="stat-matches" style="font-size: 1.1rem; color: #38bdf8; font-weight: 800; margin: 0;">0</p>
+                        </div>
                     </div>
 
                     <button id="create-btn" class="primary-btn" aria-label="Create Room">Create Room</button>
+
+                    <div class="quick-rules">
+                        <h4>Pro-Tip</h4>
+                        <div id="pro-tip-display" style="font-size: 0.85rem; color: #cbd5e1; text-align: center; line-height: 1.5; font-weight: 600; min-height: 70px; display: flex; align-items: center; justify-content: center; padding: 0 5px;">
+                            Loading tip...
+                        </div>
+                    </div>
                 </div>
+                
                 <div class="divider">OR</div>
+                
                 <div class="panel">
                     <h3>Join a Game</h3>
                     <input type="text" id="guest-name" placeholder="Your Name" aria-label="Your Name">
@@ -132,15 +168,53 @@
         </section>
 
         <section id="lobby-screen" class="card hidden-screen" style="text-align: center;">
-            <h2>Waiting for Opponent</h2>
-            <p class="subtitle">Send this code to your friend:</p>
-            <div id="room-code-display" class="massive-code" aria-label="Your Room Code">----</div>
-            <button id="copy-link-btn" class="secondary-btn" style="max-width: 300px; margin: 0 auto;" aria-label="Copy Invite Link">Copy Invite Link</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="text-align: left;">
+                    <p style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Room Code</p>
+                    <h2 id="room-code-display" style="color: var(--primary-color); font-size: 2.5rem; letter-spacing: 5px; margin: 0; text-shadow: 0 0 20px rgba(99,102,241,0.5);">----</h2>
+                </div>
+                <div style="text-align: right;">
+                    <p id="lobby-status-text" style="color: #f59e0b; font-weight: 800; font-size: 0.9rem; animation: pulse 1.5s infinite;">Waiting for Player...</p>
+                    <p id="lobby-players-text" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">1 / 2 Connected</p>
+                </div>
+            </div>
+
+            <h4 style="margin: 10px 0; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Category</h4>
+            <div class="genre-selector" id="lobby-genre" style="margin-bottom: 15px;"></div>
+
+            <h4 style="margin: 15px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
+            <div class="genre-selector" id="lobby-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
+                <div class="genre-option selected" data-difficulty="any" role="button" tabindex="0">Any</div>
+                <div class="genre-option" data-difficulty="easy" role="button" tabindex="0">Easy</div>
+                <div class="genre-option" data-difficulty="medium" role="button" tabindex="0">Med</div>
+                <div class="genre-option" data-difficulty="hard" role="button" tabindex="0">Hard</div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button id="copy-link-btn" class="secondary-btn" style="flex: 1; font-size: 0.95rem;" aria-label="Copy Invite Link">Copy Link</button>
+                <button id="start-game-btn" class="primary-btn hidden-element" style="flex: 2;">Start Match</button>
+            </div>
+            <p id="guest-waiting-text" class="hidden-element" style="color: var(--primary-color); font-weight: 700; margin-top: 15px; animation: pulse 1.5s infinite;">Waiting for Host to start...</p>
         </section>
 
         <section id="countdown-screen" class="card hidden-screen" style="text-align: center; justify-content: center;">
             <p style="font-size: 1.5rem; color: var(--text-muted); font-weight: 800; letter-spacing: 5px; text-transform: uppercase; margin-bottom: 10px;">Match Found</p>
             <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); text-shadow: 0 0 40px rgba(99, 102, 241, 0.8); margin: 0;">3</h2>
+        </section>
+
+        <section id="wager-screen" class="card hidden-screen" style="text-align: center; justify-content: center; min-height: 400px;">
+            <p style="font-size: 1.2rem; color: var(--text-muted); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">Round 5</p>
+            <h2 style="font-size: 3.5rem; color: #f59e0b; text-shadow: 0 0 30px rgba(245, 158, 11, 0.6); margin: 0 0 10px;">WAGER ROUND</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 30px; color: var(--text-main);">Category: <span id="wager-category" style="color: var(--primary-color); font-weight: bold; text-transform: uppercase;">SCIENCE</span></p>
+            
+            <p style="margin-bottom: 15px; font-weight: 600; color: var(--text-muted);">Choose your risk (+/- points):</p>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+                <button class="secondary-btn wager-btn" data-wager="1" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">1</button>
+                <button class="secondary-btn wager-btn" data-wager="2" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">2</button>
+                <button class="secondary-btn wager-btn" data-wager="3" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">3</button>
+            </div>
+            
+            <p id="wager-wait-text" class="hidden-element" style="color: var(--primary-color); font-weight: 700; height: 20px;"></p>
         </section>
 
         <section id="quiz-screen" class="card hidden-screen quiz-layout">

@@ -4,12 +4,14 @@ const connectionStartTime = Date.now();
 const myPersistentId = Math.random().toString(36).substring(2, 15);
 
 const gameState = {
-    roomId: null, genre: null, myPlayerId: null, role: null,
+    roomId: null, genre: null, difficulty: null, myPlayerId: null, role: null,
     currentQuestionIndex: 0, myScore: 0, enemyScore: 0, myName: "Me", questions: [],
-    seriesMyScore: 0, seriesEnemyScore: 0 
+    seriesMyScore: 0, seriesEnemyScore: 0,
+    myWager: null, enemyWager: null
 };
 
 let questionTimer = null;
+let countdownTimer = null; 
 let timeLeft = 20; 
 let expectedEndTime = 0;
 let isPaused = false;
@@ -21,28 +23,57 @@ let isWaitingForOpponent = false;
 let pauseTimerInterval = null;
 let pauseCountdown = 10;
 
-// --- AUDIO ENGINE ---
+// --- BULLETPROOF AUDIO ENGINE ---
+class MultiAudio {
+    constructor(src, poolSize, vol) {
+        this.pool = [];
+        this.idx = 0;
+        for (let i = 0; i < poolSize; i++) {
+            let a = new Audio(src);
+            a.volume = vol;
+            this.pool.push(a);
+        }
+    }
+    play() {
+        let a = this.pool[this.idx];
+        a.currentTime = 0;
+        let p = a.play();
+        if (p !== undefined) p.catch(e => console.warn("Audio blocked by browser"));
+        this.idx = (this.idx + 1) % this.pool.length;
+    }
+    stop() {
+        this.pool.forEach(a => {
+            a.pause();
+            a.currentTime = 0;
+        });
+    }
+}
+
 const sfx = {
-    click: new Audio('click.mp3'),
-    tick: new Audio('tick.mp3'),
-    win: new Audio('win.mp3'),
-    lose: new Audio('lose.mp3'),
-    bgm: new Audio('bgm.mp3') 
+    click: new MultiAudio('click.mp3', 5, 0.5),    
+    tick: new MultiAudio('tick.mp3', 2, 0.6),      
+    notif: new MultiAudio('notif.mp3', 3, 0.7),    
+    win: new MultiAudio('win.mp3', 1, 0.6),
+    lose: new MultiAudio('lose.mp3', 1, 0.5),
+    bgm: new Audio('bgm.mp3')                      
 };
 
-sfx.click.volume = 0.5; sfx.tick.volume = 0.6; sfx.win.volume = 0.6; sfx.lose.volume = 0.5; sfx.bgm.volume = 0.3; sfx.bgm.loop = true;
+sfx.bgm.volume = 0.3; 
+sfx.bgm.loop = true; 
 
 function playSound(audioObj) {
     if (!audioObj) return;
-    audioObj.currentTime = 0; 
-    const playPromise = audioObj.play();
-    if (playPromise !== undefined) playPromise.catch(e => console.warn("Audio blocked"));
+    if (audioObj.play) audioObj.play();
 }
 
 function stopSound(audioObj) {
     if (!audioObj) return;
-    audioObj.pause();
-    audioObj.currentTime = 0;
+    if (audioObj.stop) {
+        audioObj.stop(); 
+    } else if (audioObj.pause) {
+        audioObj.pause(); 
+        audioObj.currentTime = 0;
+    }
 }
 
 let bgmStarted = false;
@@ -53,6 +84,8 @@ function startBGM() {
     }
 }
 window.addEventListener('click', startBGM);
+
+// ---------------------------------
 
 function showToast(message) {
     const tc = document.getElementById('toast-container');
@@ -78,6 +111,19 @@ const funFacts = [
     "Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
 ];
 
+const proTips = [
+    "Save your Decrypt power-up for Round 5's Wager Phase to secure a massive point swing!",
+    "Using the Glitch power-up during Sudden Death causes maximum panic.",
+    "Overclock adds 8 seconds to your timer. Use it when you need time to think!",
+    "Wager Rounds can make or break a match. Don't bet 3 points unless you're confident.",
+    "In Sudden Death, speed matters just as much as accuracy. Be the first to answer!",
+    "If both players answer correctly, the one who answered faster gets the point.",
+    "Pay attention to the Category before Round 5 starts so you can plan your wager.",
+    "You only get one of each power-up per match. Don't waste them early!",
+    "A Glitch power-up shakes the enemy's screen and blurs their answers for 5 seconds.",
+    "The host controls the category and difficulty. Pick your strongest subjects!"
+];
+
 function setHourlyFunFact() {
     const display = document.getElementById('fun-fact-display');
     if (!display) return;
@@ -85,6 +131,37 @@ function setHourlyFunFact() {
     const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
     const factIndex = uniqueHourCounter % funFacts.length;
     display.innerHTML = funFacts[factIndex];
+}
+
+let currentTipIndex = 0;
+function initProTips() {
+    const display = document.getElementById('pro-tip-display');
+    if (!display) return;
+    
+    currentTipIndex = Math.floor(Math.random() * proTips.length);
+    display.innerHTML = proTips[currentTipIndex];
+    
+    display.style.transition = 'opacity 0.2s ease-in-out';
+
+    const tipBox = display.closest('.quick-rules');
+    if (tipBox) {
+        tipBox.style.cursor = 'pointer';
+        tipBox.title = 'Click for next tip';
+        
+        tipBox.onmouseenter = () => tipBox.style.background = 'rgba(255,255,255,0.05)';
+        tipBox.onmouseleave = () => tipBox.style.background = 'rgba(0, 0, 0, 0.2)';
+        
+        tipBox.onclick = () => {
+            playSound(sfx.click);
+            currentTipIndex = (currentTipIndex + 1) % proTips.length;
+            
+            display.style.opacity = '0';
+            setTimeout(() => {
+                display.innerHTML = proTips[currentTipIndex];
+                display.style.opacity = '1';
+            }, 200); 
+        };
+    }
 }
 
 let mySelectedAvatar = "🦊"; 
@@ -135,10 +212,20 @@ function injectDailyGenres(containerId, isRematch = false) {
         };
 
         btn.onclick = (e) => {
+            if (gameState.role === 'guest') return; 
             playSound(sfx.click);
             container.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
             e.target.classList.add('selected');
-            if (!isRematch) mySelectedGenre = g;
+            
+            if (containerId === 'lobby-genre') {
+                mySelectedGenre = g;
+                if(socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
+            } 
+            else if (containerId === 'rematch-genre' || containerId === 'guest-rematch-genre') {
+                let diffContainer = document.getElementById(gameState.role === 'host' ? 'rematch-difficulty' : 'guest-rematch-difficulty');
+                let rDiff = diffContainer.querySelector('.selected').getAttribute('data-difficulty');
+                if(socket) socket.emit('update-rematch-settings', gameState.roomId, g, rDiff);
+            }
         };
         container.appendChild(btn);
     });
@@ -168,6 +255,13 @@ socket.on('connect', () => {
     if (gameState.roomId) {
         socket.emit('reconnect-player', gameState.roomId, myPersistentId);
     }
+});
+
+socket.on('global-stats', (online, matches) => {
+    const statOnline = document.getElementById('stat-online');
+    const statMatches = document.getElementById('stat-matches');
+    if(statOnline) statOnline.textContent = online;
+    if(statMatches) statMatches.textContent = matches;
 });
 
 socket.on('pause-game', (playerName) => {
@@ -241,10 +335,71 @@ socket.on('default-win', () => {
 });
 
 socket.on('room-created', id => { 
-    document.getElementById('room-code-display').textContent = id; 
+    gameState.role = 'host';
     gameState.roomId = id;
+    document.getElementById('room-code-display').textContent = id; 
     switchScreen(screens.lobby); 
 });
+
+socket.on('room-joined', (id, hostGenre, hostDiff) => {
+    gameState.roomId = id;
+    gameState.role = 'guest';
+    document.getElementById('room-code-display').textContent = id;
+    
+    document.getElementById('lobby-genre').style.pointerEvents = 'none';
+    document.getElementById('lobby-genre').style.opacity = '0.6';
+    document.getElementById('lobby-difficulty').style.pointerEvents = 'none';
+    document.getElementById('lobby-difficulty').style.opacity = '0.6';
+
+    document.querySelectorAll('#lobby-genre .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-genre') === hostGenre) o.classList.add('selected');
+    });
+    document.querySelectorAll('#lobby-difficulty .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-difficulty') === hostDiff) o.classList.add('selected');
+    });
+
+    document.getElementById('lobby-status-text').textContent = "Connected!";
+    document.getElementById('lobby-status-text').style.color = "#10b981";
+    document.getElementById('lobby-players-text').textContent = "2 / 2 Connected";
+    document.getElementById('copy-link-btn').style.display = 'none';
+    document.getElementById('guest-waiting-text').classList.remove('hidden-element');
+
+    switchScreen(screens.lobby);
+});
+
+socket.on('player-joined', (guestName) => {
+    showToast(`${guestName} joined the lobby!`);
+    document.getElementById('lobby-status-text').textContent = "Opponent Found!";
+    document.getElementById('lobby-status-text').style.color = "#10b981";
+    document.getElementById('lobby-players-text').textContent = "2 / 2 Connected";
+    document.getElementById('copy-link-btn').style.display = 'none';
+    document.getElementById('start-game-btn').classList.remove('hidden-element');
+});
+
+socket.on('settings-updated', (genre, diff) => {
+    document.querySelectorAll('#lobby-genre .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-genre') === genre) o.classList.add('selected');
+    });
+    document.querySelectorAll('#lobby-difficulty .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
+    });
+});
+
+socket.on('rematch-settings-updated', (genre, diff) => {
+    document.querySelectorAll('#guest-rematch-genre .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-genre') === genre) o.classList.add('selected');
+    });
+    document.querySelectorAll('#guest-rematch-difficulty .genre-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
+    });
+});
+
 
 socket.on('join-error', (errorMessage) => {
     showToast(errorMessage);
@@ -275,9 +430,53 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
     startCountdownSequence();
 });
 
+socket.on('start-wager-phase', (genre) => {
+    document.getElementById('wager-category').textContent = genre;
+    
+    document.querySelectorAll('.wager-btn').forEach(b => {
+        b.disabled = false;
+        b.style.opacity = '1';
+    });
+    
+    const waitText = document.getElementById('wager-wait-text');
+    waitText.textContent = "Waiting for opponent...";
+    waitText.style.color = "var(--primary-color)";
+    waitText.classList.add('hidden-element');
+    
+    gameState.myWager = null;
+    switchScreen(screens.wager);
+
+    let wTime = 10;
+    waitText.textContent = `Choose quickly! (${wTime}s)`;
+    waitText.classList.remove('hidden-element');
+    
+    window.wagerInterval = setInterval(() => {
+        wTime--;
+        if (!gameState.myWager) waitText.textContent = `Choose quickly! (${wTime}s)`;
+        if (wTime <= 0) {
+            clearInterval(window.wagerInterval);
+            if (!gameState.myWager) {
+                document.querySelector('.wager-btn[data-wager="1"]').click(); 
+            }
+        }
+    }, 1000);
+});
+
+socket.on('wager-phase-complete', (wagers) => {
+    gameState.myWager = wagers[socket.id];
+    const enemyId = Object.keys(wagers).find(id => id !== socket.id);
+    gameState.enemyWager = wagers[enemyId];
+    
+    const waitText = document.getElementById('wager-wait-text');
+    waitText.textContent = "Wagers Locked! Prepare for battle...";
+    waitText.style.color = "#10b981"; 
+    waitText.classList.remove('hidden-element');
+    playSound(sfx.win); 
+});
+
 socket.on('round-results', (answers, correctAns) => {
     clearInterval(questionTimer);
-    stopSound(sfx.tick);
+    stopSound(sfx.tick); 
     
     isWaitingForOpponent = false;
     
@@ -294,9 +493,15 @@ socket.on('round-results', (answers, correctAns) => {
     const myAns = myData.index;
     const enemyAns = enemyData.index;
 
-    if (gameState.currentQuestionIndex < 5) {
+    if (gameState.currentQuestionIndex < 4) {
         if (myAns === q.answer) gameState.myScore++;
         if (enemyAns === q.answer) gameState.enemyScore++;
+    } else if (gameState.currentQuestionIndex === 4) {
+        if (myAns === q.answer) gameState.myScore += gameState.myWager;
+        else gameState.myScore -= gameState.myWager;
+
+        if (enemyAns === q.answer) gameState.enemyScore += gameState.enemyWager;
+        else gameState.enemyScore -= gameState.enemyWager;
     } else if (gameState.currentQuestionIndex === 5) {
         if (myAns === q.answer && enemyAns !== q.answer) {
             gameState.myScore++;
@@ -325,12 +530,23 @@ socket.on('round-results', (answers, correctAns) => {
     }
 
     if (goNext) {
+        let wagerText = "";
+        if (gameState.currentQuestionIndex === 4) {
+            let myWagerMod = myAns === q.answer ? `+${gameState.myWager}` : `-${gameState.myWager}`;
+            let enemyWagerMod = enemyAns === q.answer ? `+${gameState.enemyWager}` : `-${gameState.enemyWager}`;
+            wagerText = `
+                <p style="margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: #f59e0b;">
+                    WAGER RESULTS: You ${myWagerMod} | Enemy ${enemyWagerMod}
+                </p>`;
+        }
+
         optsContainer.innerHTML = `
             <div style="background: rgba(255,255,255,0.05); padding: 15px 20px; border-radius: 12px; text-align: left;">
                 <p style="margin-bottom:6px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Round Review</p>
                 <p style="margin-bottom:6px; font-size: 1.05rem;">Answer: <strong style="color:var(--primary-color);">${q.options[q.answer]}</strong></p>
                 <p style="margin-bottom:4px; font-size:0.95rem;">You: ${myAns === -1 ? 'Timeout' : q.options[myAns]} <span class="${myAns === q.answer ? 'text-correct' : 'text-incorrect'}">${myAns === q.answer ? '(Correct)' : '(Incorrect)'}</span></p>
                 <p style="font-size:0.95rem;">Enemy: ${enemyAns === -1 ? 'Timeout' : q.options[enemyAns]} <span class="${enemyAns === q.answer ? 'text-correct' : 'text-incorrect'}">${enemyAns === q.answer ? '(Correct)' : '(Incorrect)'}</span></p>
+                ${wagerText}
             </div>
             ${isSuddenDeathTrigger ? `<h3 style="color:#ef4444; margin-top:15px; text-align:center; font-size: 1.2rem;">WARNING: SUDDEN DEATH NEXT</h3>` : ``}
         `;
@@ -349,6 +565,8 @@ socket.on('round-results', (answers, correctAns) => {
              optsContainer.appendChild(waitingText);
         }
     } else {
+        if (socket) socket.emit('match-finished', gameState.roomId);
+
         document.getElementById('powerups-ui').style.display = 'none'; 
         document.getElementById('question-text').textContent = "Match Complete";
         document.getElementById('turn-indicator').textContent = "Final";
@@ -401,10 +619,18 @@ socket.on('round-results', (answers, correctAns) => {
             let selDiff = "any";
             
             [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
-                const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text; p.onclick = (e) => {
+                const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
+                
+                p.setAttribute('data-difficulty', d.id);
+                
+                p.onclick = (e) => {
                     playSound(sfx.click);
                     rdiff.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
                     e.target.classList.add('selected'); selDiff = d.id;
+                    
+                    const activeGenreBtn = document.querySelector('#rematch-genre .genre-option.selected');
+                    const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
+                    socket.emit('update-rematch-settings', gameState.roomId, finalGenre, selDiff);
                 };
                 
                 p.setAttribute('role', 'button');
@@ -412,7 +638,12 @@ socket.on('round-results', (answers, correctAns) => {
                 p.setAttribute('aria-label', `${d.text} Difficulty`);
                 p.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.click(); }};
 
-                if(d.id === 'any') p.classList.add('selected');
+                if(d.id === gameState.difficulty) {
+                    p.classList.add('selected');
+                    selDiff = d.id;
+                } else if (!gameState.difficulty && d.id === 'any') {
+                    p.classList.add('selected');
+                }
                 rdiff.appendChild(p);
             });
             
@@ -434,15 +665,26 @@ socket.on('round-results', (answers, correctAns) => {
             waitingBox.style.opacity = '0.8';
             
             waitingBox.innerHTML = `
-                <h3 style="margin-bottom: 8px; color: var(--text-muted);">Waiting on Host</h3>
-                <div style="padding: 15px 0;">
-                    <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 700; animation: pulse 1.5s infinite;">
-                        Host is setting up the next round...
-                    </p>
-                </div>
+                <h3 style="margin-bottom: 15px; color: var(--primary-color);">Host is setting up...</h3>
+                <div class="genre-selector" id="guest-rematch-genre" style="margin-bottom: 10px; pointer-events: none; opacity: 0.6;"></div>
+                <h4 style="margin: 10px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
+                <div class="genre-selector" id="guest-rematch-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 15px; pointer-events: none; opacity: 0.6;"></div>
                 <button id="back-menu-btn-guest" class="secondary-btn" style="margin-top: 15px;">Leave to Main Menu</button>
             `;
             optsContainer.appendChild(waitingBox);
+            
+            injectDailyGenres('guest-rematch-genre', true);
+            
+            const rdiff = document.getElementById('guest-rematch-difficulty');
+            [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
+                const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
+                
+                p.setAttribute('data-difficulty', d.id);
+                
+                if(d.id === gameState.difficulty) p.classList.add('selected');
+                else if (!gameState.difficulty && d.id === 'any') p.classList.add('selected');
+                rdiff.appendChild(p);
+            });
 
             document.getElementById('back-menu-btn-guest').onclick = () => {
                 playSound(sfx.click);
@@ -452,7 +694,125 @@ socket.on('round-results', (answers, correctAns) => {
     }
 });
 
-socket.on('load-next-question', () => { gameState.currentQuestionIndex++; renderQuestion(); });
+function startCountdownSequence() {
+    clearInterval(countdownTimer); 
+    switchScreen(screens.countdown);
+    let count = 3;
+    const countText = document.getElementById('countdown-text');
+    countText.textContent = count;
+    countText.classList.add('countdown-pulse');
+    playSound(sfx.tick);
+    
+    countdownTimer = setInterval(() => {
+        count--;
+        if (count > 0) {
+            countText.textContent = count;
+            playSound(sfx.tick);
+        } else {
+            clearInterval(countdownTimer);
+            countText.classList.remove('countdown-pulse');
+            switchScreen(screens.quiz);
+            renderQuestion();
+        }
+    }, 1000);
+}
+
+function renderQuestion() {
+    stopSound(sfx.tick); 
+    optsContainer.classList.remove('jammed-state'); 
+    optsContainer.classList.add('options-grid'); 
+    
+    const currentQ = gameState.questions[gameState.currentQuestionIndex];
+    document.getElementById('question-text').textContent = currentQ.q;
+    
+    isPaused = false;
+    let durationSec = (gameState.currentQuestionIndex === 5) ? 7 : 20;
+    timeLeft = durationSec;
+    expectedEndTime = Date.now() + (durationSec * 1000);
+    tickSoundPlayedForSecond = -1;
+
+    if (gameState.currentQuestionIndex === 5) {
+        document.getElementById('turn-indicator').innerHTML = `<span class="sudden-death-text">SUDDEN DEATH</span>`;
+        document.getElementById('bg-video').classList.add('sudden-death-bg');
+    } else if (gameState.currentQuestionIndex === 4) {
+        document.getElementById('turn-indicator').innerHTML = `<span style="color:#f59e0b; font-weight:900;">WAGER ROUND</span>`;
+        document.getElementById('bg-video').classList.remove('sudden-death-bg');
+    } else {
+        document.getElementById('turn-indicator').textContent = `Round ${gameState.currentQuestionIndex + 1}`;
+        document.getElementById('bg-video').classList.remove('sudden-death-bg');
+    }
+    
+    optsContainer.innerHTML = '';
+    timerDisplay.classList.remove('hidden-element');
+    timerDisplay.textContent = `${timeLeft}s`;
+    clearInterval(questionTimer);
+
+    questionTimer = setInterval(() => {
+        if (isPaused) return;
+
+        const remainingMs = expectedEndTime - Date.now();
+        timeLeft = Math.ceil(remainingMs / 1000);
+
+        if (timeLeft <= 0) {
+            timeLeft = 0;
+            timerDisplay.textContent = `0s`;
+            clearInterval(questionTimer);
+            stopSound(sfx.tick); 
+            
+            isWaitingForOpponent = true;
+
+            if(socket) socket.emit('submit-answer', gameState.roomId, -1, 0);
+            
+            optsContainer.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; border: 2px dashed #ef4444;">
+                    <h3 style="color: #ef4444; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #ef4444;">Time's Up!</h3>
+                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
+                </div>
+            `;
+            return;
+        }
+
+        timerDisplay.textContent = `${timeLeft}s`;
+        
+        if (timeLeft <= 5 && timeLeft > 0) {
+            timerDisplay.classList.add('timer-warning'); 
+            
+            if (tickSoundPlayedForSecond !== timeLeft) {
+                playSound(sfx.tick);
+                tickSoundPlayedForSecond = timeLeft;
+            }
+        } else {
+            timerDisplay.classList.remove('timer-warning');
+        }
+
+    }, 100);
+
+    currentQ.options.forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn'; btn.textContent = opt;
+        
+        btn.setAttribute('aria-label', `Select ${opt}`);
+        btn.onclick = () => {
+            playSound(sfx.click); 
+            clearInterval(questionTimer);
+            stopSound(sfx.tick); 
+            
+            isWaitingForOpponent = true;
+
+            if(socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft);
+            
+            optsContainer.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(56, 189, 248, 0.1); border-radius: 16px; border: 2px dashed #38bdf8;">
+                    <h3 style="color: #38bdf8; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #38bdf8;">Answer Locked</h3>
+                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
+                </div>
+            `;
+        };
+        optsContainer.appendChild(btn);
+    });
+}
+
+socket.on('load-next-question', () => { switchScreen(screens.quiz); gameState.currentQuestionIndex++; renderQuestion(); });
 
 socket.on('restart-game', (g, sanitizedQuestions) => { 
     clearInterval(pauseTimerInterval); 
@@ -463,6 +823,7 @@ socket.on('restart-game', (g, sanitizedQuestions) => {
     document.getElementById('bg-video').classList.remove('sudden-death-bg');
     gameState.genre = g; gameState.questions = sanitizedQuestions;
     gameState.currentQuestionIndex = 0; gameState.myScore = 0; gameState.enemyScore = 0; 
+    gameState.myWager = null; gameState.enemyWager = null;
     
     startCountdownSequence();
 });
@@ -479,7 +840,6 @@ socket.on('enemy-powerup', (type, enemyName) => {
     
     if(type === 'jammer') {
         showToast(`<strong>${enemyName}</strong> glitched your screen!`);
-        playSound(sfx.lose); 
         optsContainer.classList.add('jammed-state');
         
         const vig = document.getElementById('jammer-vignette');
@@ -492,7 +852,7 @@ socket.on('enemy-powerup', (type, enemyName) => {
     }
 });
 
-socket.on('receive-chat', d => { playSound(sfx.click); addMsg(d.name, d.text, false); });
+socket.on('receive-chat', d => { playSound(sfx.notif); addMsg(d.name, d.text, false); });
 
 // --- INITIALIZATION ON LOAD ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -515,9 +875,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (roomParam) document.getElementById('room-input').value = roomParam;
     
     setHourlyFunFact();
-    injectDailyGenres('host-genre');
+    
+    initProTips(); 
+    
+    injectDailyGenres('lobby-genre');
 
-    document.querySelectorAll('.avatar-option, #host-difficulty .genre-option').forEach(el => {
+    document.querySelectorAll('.avatar-option').forEach(el => {
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -531,6 +894,7 @@ const screens = {
     menu: document.getElementById('menu-screen'), 
     lobby: document.getElementById('lobby-screen'), 
     countdown: document.getElementById('countdown-screen'),
+    wager: document.getElementById('wager-screen'), 
     quiz: document.getElementById('quiz-screen') 
 };
 const timerDisplay = document.getElementById('timer-display');
@@ -603,6 +967,28 @@ document.getElementById('pu-jammer').onclick = function() {
     if(socket) socket.emit('trigger-powerup', gameState.roomId, 'jammer', gameState.myName);
 };
 
+document.querySelectorAll('.wager-btn').forEach(btn => {
+    btn.onclick = (e) => {
+        if (gameState.myWager) return; 
+        playSound(sfx.click);
+        const amount = parseInt(e.target.getAttribute('data-wager'));
+        gameState.myWager = amount;
+        
+        document.querySelectorAll('.wager-btn').forEach(b => {
+            b.disabled = true;
+            if(b !== e.target) b.style.opacity = '0.3';
+        });
+        
+        clearInterval(window.wagerInterval);
+        
+        const waitText = document.getElementById('wager-wait-text');
+        waitText.textContent = "Waiting for opponent to wager...";
+        waitText.classList.remove('hidden-element');
+        
+        if(socket) socket.emit('submit-wager', gameState.roomId, amount);
+    };
+});
+
 // --- MENU HANDLERS ---
 document.querySelectorAll('.avatar-option').forEach(option => {
     option.onclick = (e) => {
@@ -614,12 +1000,14 @@ document.querySelectorAll('.avatar-option').forEach(option => {
     };
 });
 
-document.querySelectorAll('#host-difficulty .genre-option').forEach(option => {
+document.querySelectorAll('#lobby-difficulty .genre-option').forEach(option => {
     option.onclick = (e) => {
+        if (gameState.role === 'guest') return;
         playSound(sfx.click);
-        document.querySelectorAll('#host-difficulty .genre-option').forEach(opt => opt.classList.remove('selected'));
+        document.querySelectorAll('#lobby-difficulty .genre-option').forEach(opt => opt.classList.remove('selected'));
         e.target.classList.add('selected');
         mySelectedDifficulty = e.target.getAttribute('data-difficulty');
+        if(socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
     };
 });
 
@@ -627,6 +1015,7 @@ document.getElementById('create-btn').onclick = () => {
     playSound(sfx.click);
     const n = document.getElementById('host-name').value || "Host";
     gameState.myName = n;
+    
     if(socket) socket.emit('create-room', mySelectedAvatar, n, mySelectedGenre, mySelectedDifficulty, myPersistentId);
 };
 
@@ -649,120 +1038,14 @@ document.getElementById('join-btn').onclick = () => {
     if(socket) socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, n, myPersistentId);
 };
 
-function startCountdownSequence() {
-    switchScreen(screens.countdown);
-    let count = 3;
-    const countText = document.getElementById('countdown-text');
-    countText.textContent = count;
-    countText.classList.add('countdown-pulse');
-    playSound(sfx.tick);
-    
-    const countInterval = setInterval(() => {
-        count--;
-        if (count > 0) {
-            countText.textContent = count;
-            playSound(sfx.tick);
-        } else {
-            clearInterval(countInterval);
-            countText.classList.remove('countdown-pulse');
-            switchScreen(screens.quiz);
-            renderQuestion();
-        }
-    }, 1000);
-}
-
-function renderQuestion() {
-    stopSound(sfx.tick);
-    
-    optsContainer.classList.remove('jammed-state'); 
-    optsContainer.classList.add('options-grid'); 
-    
-    const currentQ = gameState.questions[gameState.currentQuestionIndex];
-    document.getElementById('question-text').textContent = currentQ.q;
-    
-    isPaused = false;
-    let durationSec = (gameState.currentQuestionIndex === 5) ? 7 : 20;
-    timeLeft = durationSec;
-    expectedEndTime = Date.now() + (durationSec * 1000);
-    tickSoundPlayedForSecond = -1;
-
-    if (gameState.currentQuestionIndex === 5) {
-        document.getElementById('turn-indicator').innerHTML = `<span class="sudden-death-text">SUDDEN DEATH</span>`;
-        document.getElementById('bg-video').classList.add('sudden-death-bg');
-    } else {
-        document.getElementById('turn-indicator').textContent = `Round ${gameState.currentQuestionIndex + 1}`;
-        document.getElementById('bg-video').classList.remove('sudden-death-bg');
-    }
-    
-    optsContainer.innerHTML = '';
-    timerDisplay.classList.remove('hidden-element');
-    timerDisplay.textContent = `${timeLeft}s`;
-    clearInterval(questionTimer);
-
-    questionTimer = setInterval(() => {
-        if (isPaused) return;
-
-        const remainingMs = expectedEndTime - Date.now();
-        timeLeft = Math.ceil(remainingMs / 1000);
-
-        if (timeLeft <= 0) {
-            timeLeft = 0;
-            timerDisplay.textContent = `0s`;
-            clearInterval(questionTimer);
-            stopSound(sfx.tick); 
-            
-            isWaitingForOpponent = true;
-
-            if(socket) socket.emit('submit-answer', gameState.roomId, -1, 0);
-            
-            optsContainer.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; border: 2px dashed #ef4444;">
-                    <h3 style="color: #ef4444; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #ef4444;">Time's Up!</h3>
-                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
-                </div>
-            `;
-            return;
-        }
-
-        timerDisplay.textContent = `${timeLeft}s`;
-        
-        if (timeLeft <= 5 && timeLeft > 0) {
-            timerDisplay.classList.add('timer-warning'); 
-            
-            if (tickSoundPlayedForSecond !== timeLeft) {
-                playSound(sfx.tick);
-                tickSoundPlayedForSecond = timeLeft;
-            }
-        } else {
-            timerDisplay.classList.remove('timer-warning');
-        }
-
-    }, 100);
-
-    currentQ.options.forEach((opt, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'option-btn'; btn.textContent = opt;
-        
-        btn.setAttribute('aria-label', `Select ${opt}`);
-        btn.onclick = () => {
-            playSound(sfx.click); 
-            clearInterval(questionTimer);
-            stopSound(sfx.tick);
-            
-            isWaitingForOpponent = true;
-
-            if(socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft);
-            
-            optsContainer.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(56, 189, 248, 0.1); border-radius: 16px; border: 2px dashed #38bdf8;">
-                    <h3 style="color: #38bdf8; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #38bdf8;">Answer Locked</h3>
-                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
-                </div>
-            `;
-        };
-        optsContainer.appendChild(btn);
-    });
-}
+document.getElementById('start-game-btn').onclick = () => {
+    playSound(sfx.click);
+    const btn = document.getElementById('start-game-btn');
+    btn.textContent = "Loading...";
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    if(socket) socket.emit('start-game', gameState.roomId);
+};
 
 // --- CHAT SYSTEM ---
 const chatIn = document.getElementById('chat-input');
@@ -787,7 +1070,7 @@ emojiList.forEach(emoji => {
         }
     };
     span.onclick = () => {
-        playSound(sfx.click);
+        // Removed click sound so typing feels native
         chatIn.value += emoji;
         chatIn.focus();
     };
@@ -796,7 +1079,7 @@ emojiList.forEach(emoji => {
 
 emojiBtn.onclick = (e) => {
     e.stopPropagation();
-    playSound(sfx.click);
+    // Removed click sound for a silent visual UI shift
     emojiPicker.classList.toggle('hidden-element');
 };
 
@@ -814,9 +1097,24 @@ function addMsg(n, t, me) {
 }
 
 document.getElementById('send-chat-btn').onclick = () => {
-    playSound(sfx.click);
+    playSound(sfx.notif); 
     const t = chatIn.value.trim(); if(!t) return;
     if(socket) socket.emit('send-chat', gameState.roomId, { name: gameState.myName, text: t });
     addMsg("You", t, true); chatIn.value = "";
 };
 chatIn.onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
+
+// --- GLOBAL LOGO HOME BUTTON ---
+const globalLogo = document.getElementById('global-logo');
+if (globalLogo) {
+    globalLogo.onclick = () => {
+        // If they are already on the main menu, do nothing
+        if (screens.menu.classList.contains('active-screen')) return;
+        
+        playSound(sfx.click);
+        
+        // If they are in a live game, disconnect them and return to menu
+        if (socket) socket.disconnect();
+        setTimeout(() => window.location.reload(), 150);
+    };
+}

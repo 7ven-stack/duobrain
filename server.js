@@ -51,7 +51,6 @@ async function getSessionToken() {
 async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, retries = 2) {
     const categoryId = categoryMap[genre] || 9; 
     const diffParam = difficulty !== 'any' ? `&difficulty=${difficulty}` : '';
-    
     const tokenParam = token ? `&token=${token}` : '';
     const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple${tokenParam}`;
 
@@ -59,7 +58,6 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
         const response = await fetch(url);
 
         if (response.status === 429 && retries > 0) {
-            console.log("⏳ API rate limited! Waiting 3 seconds to retry...");
             await delay(3000);
             return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
         }
@@ -67,23 +65,16 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
         const data = await response.json();
 
         if (data.response_code === 5 && retries > 0) {
-            console.log("⏳ OpenTDB rate limit hit! Waiting 3 seconds to retry...");
             await delay(3000);
             return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
         }
 
         if (data.response_code === 4 && token) {
-            console.log("🔄 Token exhausted! Resetting memory...");
             await fetch(`https://opentdb.com/api_token.php?command=reset&token=${token}`);
             return await fetchQuestionsFromAPI(genre, difficulty, token, retries);
         }
 
-        if (data.response_code === 1) {
-            console.warn(`⚠️ Not enough "${difficulty}" questions for ${genre}. Loading fallback...`);
-            return getFallbackQuestions();
-        }
-
-        if (!data.results || data.response_code !== 0) {
+        if (data.response_code === 1 || !data.results || data.response_code !== 0) {
             return getFallbackQuestions();
         }
 
@@ -92,7 +83,6 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
             const correctAnswer = he.decode(item.correct_answer);
             const incorrectAnswers = item.incorrect_answers.map(ans => he.decode(ans));
             let options = [...incorrectAnswers, correctAnswer].sort(() => Math.random() - 0.5);
-            
             const correctIdx = options.indexOf(correctAnswer);
             
             const wrongIndices = [];
@@ -104,55 +94,79 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
             if (shuffledWrong.length > 1) removableIndices.push(shuffledWrong[1]);
 
             return {
-                q: question,
-                options: options,
-                answer: correctIdx,             
-                removableIndices: removableIndices 
+                q: question, options: options, answer: correctIdx, removableIndices: removableIndices 
             };
         });
     } catch (err) {
-        console.error("API Request Failed:", err);
         return getFallbackQuestions();
     }
 }
 
+function updateGlobalStats() {
+    const playersOnline = io.engine.clientsCount;
+    const activeMatches = Object.keys(rooms).length;
+    io.emit('global-stats', playersOnline, activeMatches);
+}
+
 io.on('connection', (socket) => {
     
+    updateGlobalStats();
+
     socket.on('create-room', async (avatar, playerName, genre, difficulty, playerId) => {
         const roomId = generateRoomCode();
-        const roomToken = await getSessionToken(); 
-        const liveQuestions = await fetchQuestionsFromAPI(genre, difficulty, roomToken);
         
         rooms[roomId] = { 
             players: [], genre: genre, difficulty: difficulty, 
-            answers: {}, questions: liveQuestions, token: roomToken,
-            currentQuestionIndex: 0,
-            status: 'playing', // NEW: Server tracks if the game is active!
-            disconnectTimer: null 
+            answers: {}, questions: [], token: null,
+            currentQuestionIndex: 0, wagers: {}, status: 'lobby', disconnectTimer: null 
         };
         
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'host', connected: true });
-        
         socketToRoom[socket.id] = roomId; 
-        
         socket.emit('room-created', roomId);
+        
+        updateGlobalStats(); 
     });
 
     socket.on('join-room', (roomId, avatar, playerName, playerId) => {
         roomId = roomId.toUpperCase();
         if (!rooms[roomId]) return socket.emit('join-error', 'Room not found.');
+        if (rooms[roomId].status !== 'lobby') return socket.emit('join-error', 'Game already in progress.');
         
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'guest', connected: true });
-        
         socketToRoom[socket.id] = roomId;
 
-        const sanitizedQuestions = rooms[roomId].questions.map(q => ({ 
-            q: q.q, options: q.options, removableIndices: q.removableIndices 
-        }));
-        
-        io.to(roomId).emit('game-start', rooms[roomId].players, rooms[roomId].genre, roomId, sanitizedQuestions);
+        socket.emit('room-joined', roomId, rooms[roomId].genre, rooms[roomId].difficulty);
+        socket.to(roomId).emit('player-joined', playerName);
+    });
+
+    socket.on('update-settings', (roomId, genre, difficulty) => {
+        if (rooms[roomId] && rooms[roomId].status === 'lobby') {
+            rooms[roomId].genre = genre;
+            rooms[roomId].difficulty = difficulty;
+            socket.to(roomId).emit('settings-updated', genre, difficulty);
+        }
+    });
+
+    socket.on('update-rematch-settings', (roomId, genre, difficulty) => {
+        socket.to(roomId).emit('rematch-settings-updated', genre, difficulty);
+    });
+
+    socket.on('start-game', async (roomId) => {
+        const room = rooms[roomId];
+        if (room && room.players.length === 2 && room.status === 'lobby') {
+            room.status = 'playing';
+            room.token = await getSessionToken();
+            room.questions = await fetchQuestionsFromAPI(room.genre, room.difficulty, room.token);
+            
+            const sanitizedQuestions = room.questions.map(q => ({ 
+                q: q.q, options: q.options, removableIndices: q.removableIndices 
+            }));
+            
+            io.to(roomId).emit('game-start', room.players, room.genre, roomId, sanitizedQuestions);
+        }
     });
 
     socket.on('send-chat', (roomId, data) => socket.to(roomId).emit('receive-chat', data));
@@ -167,19 +181,41 @@ io.on('connection', (socket) => {
             const correctAns = room.questions[room.currentQuestionIndex].answer;
             io.to(roomId).emit('round-results', room.answers, correctAns);
             room.answers = {}; 
-            
-            // NEW: If we just finished round 6, mark the game as finished
-            if (room.currentQuestionIndex >= 5) {
-                room.status = 'finished';
-            }
         } else {
             io.to(roomId).emit('player-waiting');
         }
     });
 
     socket.on('next-question', (roomId) => {
-        if (rooms[roomId]) rooms[roomId].currentQuestionIndex++;
-        io.to(roomId).emit('load-next-question')
+        const room = rooms[roomId];
+        if (room) {
+            room.currentQuestionIndex++;
+            if (room.currentQuestionIndex === 4) {
+                io.to(roomId).emit('start-wager-phase', room.genre);
+            } else {
+                io.to(roomId).emit('load-next-question');
+            }
+        }
+    });
+
+    socket.on('submit-wager', (roomId, amount) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        room.wagers[socket.id] = amount;
+        
+        if (Object.keys(room.wagers).length === 2) {
+            io.to(roomId).emit('wager-phase-complete', room.wagers);
+            setTimeout(() => {
+                io.to(roomId).emit('load-next-question');
+            }, 2500); 
+        }
+    });
+
+    // FIX: Listen to the frontend and mark the room as safely finished!
+    socket.on('match-finished', (roomId) => {
+        if (rooms[roomId]) {
+            rooms[roomId].status = 'finished';
+        }
     });
 
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
@@ -188,8 +224,9 @@ io.on('connection', (socket) => {
             room.genre = newGenre; 
             room.difficulty = newDifficulty;
             room.answers = {};
+            room.wagers = {}; 
             room.currentQuestionIndex = 0; 
-            room.status = 'playing'; // NEW: Reset status to active for the rematch
+            room.status = 'playing'; 
             room.questions = await fetchQuestionsFromAPI(newGenre, newDifficulty, room.token);
             
             const sanitizedQuestions = room.questions.map(q => ({ 
@@ -200,21 +237,17 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('trigger-powerup', (roomId, type, playerName) => {
-        socket.to(roomId).emit('enemy-powerup', type, playerName);
-    });
+    socket.on('trigger-powerup', (roomId, type, playerName) => socket.to(roomId).emit('enemy-powerup', type, playerName));
 
     socket.on('reconnect-player', (roomId, playerId) => {
         if (rooms[roomId]) {
             const room = rooms[roomId];
             const player = room.players.find(p => p.playerId === playerId);
-            
             if (player && !player.connected) {
                 player.id = socket.id;
                 player.connected = true;
                 socketToRoom[socket.id] = roomId;
                 socket.join(roomId);
-
                 if (room.players.every(p => p.connected)) {
                     clearTimeout(room.disconnectTimer);
                     room.disconnectTimer = null;
@@ -226,7 +259,6 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         const roomId = socketToRoom[socket.id];
-        
         if (roomId && rooms[roomId]) {
             const room = rooms[roomId];
             delete socketToRoom[socket.id]; 
@@ -237,27 +269,22 @@ io.on('connection', (socket) => {
             if (room.players.every(p => !p.connected)) {
                 clearTimeout(room.disconnectTimer);
                 delete rooms[roomId];
-                return;
-            }
-
-            // NEW: Only trigger the 10-second grace period if the game is actively playing!
-            if (room.players.length === 2 && room.status === 'playing') {
+            } else if (room.players.length === 2 && room.status === 'playing') {
                 io.to(roomId).emit('pause-game', player ? player.name : 'Opponent');
 
                 room.disconnectTimer = setTimeout(() => {
                     io.to(roomId).emit('default-win');
-                    
-                    room.players.forEach(p => {
-                        if (p.connected) delete socketToRoom[p.id];
-                    });
+                    room.players.forEach(p => { if (p.connected) delete socketToRoom[p.id]; });
                     delete rooms[roomId];
+                    updateGlobalStats(); 
                 }, 10000); 
             } else {
-                // If they are on the Match Complete screen, just return the remaining player to the menu safely.
                 socket.to(roomId).emit('opponent-disconnected');
                 delete rooms[roomId];
             }
         }
+        
+        updateGlobalStats();
     });
 });
 
