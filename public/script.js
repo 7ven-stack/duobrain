@@ -20,6 +20,9 @@ let tickSoundPlayedForSecond = -1;
 let powerUps = { fifty: false, freeze: false, jammer: false };
 let isWaitingForOpponent = false; 
 
+// NEW: Tells the game if it's safe for the opponent to leave without triggering a penalty
+let isMatchFinished = false; 
+
 let pauseTimerInterval = null;
 let pauseCountdown = 10;
 
@@ -406,7 +409,12 @@ socket.on('join-error', (errorMessage) => {
     playSound(sfx.lose);
 });
 
+// FIX: Opponent disconnect logic is now smart enough to not trigger if the match is already over!
 socket.on('opponent-disconnected', () => {
+    if (isMatchFinished) {
+        showToast(`Opponent left the room.`);
+        return; 
+    }
     clearInterval(pauseTimerInterval); 
     showToast(`Opponent disconnected! Returning to menu...`);
     playSound(sfx.lose);
@@ -415,6 +423,7 @@ socket.on('opponent-disconnected', () => {
 
 socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
     resetPowerUps(); 
+    isMatchFinished = false; // Reset the flag when a new game starts
     document.getElementById('help-btn').style.display = 'none'; 
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
     document.getElementById('bg-video').classList.remove('sudden-death-bg'); 
@@ -565,6 +574,8 @@ socket.on('round-results', (answers, correctAns) => {
              optsContainer.appendChild(waitingText);
         }
     } else {
+        
+        isMatchFinished = true; // FIX: Lock the match as finished!
         if (socket) socket.emit('match-finished', gameState.roomId);
 
         document.getElementById('powerups-ui').style.display = 'none'; 
@@ -817,6 +828,7 @@ socket.on('load-next-question', () => { switchScreen(screens.quiz); gameState.cu
 socket.on('restart-game', (g, sanitizedQuestions) => { 
     clearInterval(pauseTimerInterval); 
     resetPowerUps();
+    isMatchFinished = false; // Reset the flag for rematches
     isWaitingForOpponent = false;
     document.getElementById('help-btn').style.display = 'none';
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
@@ -900,9 +912,44 @@ const screens = {
 const timerDisplay = document.getElementById('timer-display');
 const optsContainer = document.getElementById('options-container');
 
+// FIX: Logo now successfully hides itself alongside the footer during matches to prevent overlapping!
 function switchScreen(screenToActivate) {
     Object.values(screens).forEach(s => s.classList.replace('active-screen', 'hidden-screen'));
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
+    
+    const footer = document.getElementById('global-footer');
+    const logo = document.getElementById('global-logo');
+    
+    if (screenToActivate === screens.menu || screenToActivate === screens.lobby) {
+        if (footer) {
+            footer.style.opacity = '1';
+            footer.style.pointerEvents = 'auto';
+        }
+        if (logo) {
+            logo.style.opacity = '1';
+            logo.style.pointerEvents = 'auto';
+        }
+    } else {
+        if (footer) {
+            footer.style.opacity = '0';
+            footer.style.pointerEvents = 'none';
+        }
+        if (logo) {
+            logo.style.opacity = '0';
+            logo.style.pointerEvents = 'none';
+        }
+    }
+}
+
+// --- GLOBAL LOGO HOME BUTTON ---
+const globalLogo = document.getElementById('global-logo');
+if (globalLogo) {
+    globalLogo.onclick = () => {
+        if (screens.menu.classList.contains('active-screen')) return;
+        playSound(sfx.click);
+        if (socket) socket.disconnect();
+        setTimeout(() => window.location.reload(), 150);
+    };
 }
 
 // --- RULES MODAL LOGIC ---
@@ -1070,7 +1117,6 @@ emojiList.forEach(emoji => {
         }
     };
     span.onclick = () => {
-        // Removed click sound so typing feels native
         chatIn.value += emoji;
         chatIn.focus();
     };
@@ -1079,7 +1125,6 @@ emojiList.forEach(emoji => {
 
 emojiBtn.onclick = (e) => {
     e.stopPropagation();
-    // Removed click sound for a silent visual UI shift
     emojiPicker.classList.toggle('hidden-element');
 };
 
@@ -1103,18 +1148,3 @@ document.getElementById('send-chat-btn').onclick = () => {
     addMsg("You", t, true); chatIn.value = "";
 };
 chatIn.onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
-
-// --- GLOBAL LOGO HOME BUTTON ---
-const globalLogo = document.getElementById('global-logo');
-if (globalLogo) {
-    globalLogo.onclick = () => {
-        // If they are already on the main menu, do nothing
-        if (screens.menu.classList.contains('active-screen')) return;
-        
-        playSound(sfx.click);
-        
-        // If they are in a live game, disconnect them and return to menu
-        if (socket) socket.disconnect();
-        setTimeout(() => window.location.reload(), 150);
-    };
-}
