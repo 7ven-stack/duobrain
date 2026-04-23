@@ -220,10 +220,8 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 #chat-input { margin-bottom: 0; text-align: left; padding: 12px 45px 12px 18px; font-size: 0.95rem; flex: 1; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; width: 100%; }
 #chat-input:focus { border-color: var(--primary-color); box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); outline: none; }
 
-/* NEW: Styles the transparent button that holds your PNG */
 #emoji-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; width: auto; box-shadow: none; display: flex; align-items: center; justify-content: center; }
 
-/* NEW: Inverts your black happy.png into a soft grey, and makes it pure white on hover */
 .custom-emoji-icon { width: 22px; height: 22px; pointer-events: none; filter: invert(0.65); transition: 0.2s; }
 #emoji-btn:hover .custom-emoji-icon { filter: invert(1); transform: scale(1.1); }
 
@@ -259,7 +257,7 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 .quick-rules li { font-size: 0.8rem; color: #cbd5e1; display: flex; align-items: center; gap: 10px; font-weight: 600; }
 
 /* SERIES TRACKER BADGE */
-.series-badge { background: rgba(0,0,0,0.5); padding: 6px 14px; border-radius: 10px; font-size: 0.8rem; color: #cbd5e1; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); text-transform: uppercase; letter-spacing: 1px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
+.series-badge { background: rgba(0,0,0,0.5); padding: 6px 14px; border-radius: 10px; font-size: 0.8rem; color: #cbd5e1; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); text-transform: uppercase; letter-spacing: 1px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); white-space: nowrap; }
 
 /* TOAST NOTIFICATIONS */
 .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -343,4 +341,7 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     .rules-scroll ul { gap: 8px; margin-top: 5px; }
     .rules-scroll li { padding: 10px; font-size: 0.75rem; }
     .rules-scroll li strong { font-size: 0.85rem; }
+    
+    /* NEW: Adjust series badge to prevent text wrapping on narrow phones */
+    .series-badge { font-size: 0.65rem; padding: 4px 8px; letter-spacing: 0; }
 }
