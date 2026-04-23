@@ -10,12 +10,12 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 const rooms = {};
+const socketToRoom = {}; 
 
 function generateRoomCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-// NEW: Expanded Category Map with all 24 possible daily genres!
 const categoryMap = {
     science: 17, math: 19, music: 12, geography: 22, 
     history: 23, movies: 11, gaming: 15, sports: 21, mythology: 20,
@@ -26,12 +26,12 @@ const categoryMap = {
 
 function getFallbackQuestions() {
     return [
-        { q: "API Rate Limit Hit! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1 },
-        { q: "Fallback Mode: Which programming language uses 'console.log'?", options: ["Python", "Java", "JavaScript", "C++"], answer: 2 },
-        { q: "Fallback Mode: What is the capital of Japan?", options: ["Seoul", "Beijing", "Tokyo", "Bangkok"], answer: 2 },
-        { q: "Fallback Mode: Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Rembrandt"], answer: 1 },
-        { q: "Fallback Mode: What is the chemical symbol for Gold?", options: ["Ag", "Au", "Fe", "Pb"], answer: 1 },
-        { q: "Fallback Mode (Sudden Death): How many bits are in a byte?", options: ["4", "8", "16", "32"], answer: 1 }
+        { q: "API Rate Limit Hit! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1, removableIndices: [0, 2] },
+        { q: "Fallback Mode: Which programming language uses 'console.log'?", options: ["Python", "Java", "JavaScript", "C++"], answer: 2, removableIndices: [0, 1] },
+        { q: "Fallback Mode: What is the capital of Japan?", options: ["Seoul", "Beijing", "Tokyo", "Bangkok"], answer: 2, removableIndices: [0, 3] },
+        { q: "Fallback Mode: Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Rembrandt"], answer: 1, removableIndices: [2, 3] },
+        { q: "Fallback Mode: What is the chemical symbol for Gold?", options: ["Ag", "Au", "Fe", "Pb"], answer: 1, removableIndices: [0, 3] },
+        { q: "Fallback Mode (Sudden Death): How many bits are in a byte?", options: ["4", "8", "16", "32"], answer: 1, removableIndices: [0, 3] }
     ];
 }
 
@@ -92,10 +92,22 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
             const correctAnswer = he.decode(item.correct_answer);
             const incorrectAnswers = item.incorrect_answers.map(ans => he.decode(ans));
             let options = [...incorrectAnswers, correctAnswer].sort(() => Math.random() - 0.5);
+            
+            const correctIdx = options.indexOf(correctAnswer);
+            
+            const wrongIndices = [];
+            options.forEach((opt, idx) => { if (idx !== correctIdx) wrongIndices.push(idx); });
+            const shuffledWrong = wrongIndices.sort(() => Math.random() - 0.5);
+            
+            const removableIndices = [];
+            if (shuffledWrong.length > 0) removableIndices.push(shuffledWrong[0]);
+            if (shuffledWrong.length > 1) removableIndices.push(shuffledWrong[1]);
+
             return {
                 q: question,
                 options: options,
-                answer: options.indexOf(correctAnswer) 
+                answer: correctIdx,             
+                removableIndices: removableIndices 
             };
         });
     } catch (err) {
@@ -106,28 +118,41 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
 
 io.on('connection', (socket) => {
     
-    socket.on('create-room', async (avatar, playerName, genre, difficulty) => {
+    socket.on('create-room', async (avatar, playerName, genre, difficulty, playerId) => {
         const roomId = generateRoomCode();
-        
         const roomToken = await getSessionToken(); 
         const liveQuestions = await fetchQuestionsFromAPI(genre, difficulty, roomToken);
         
         rooms[roomId] = { 
             players: [], genre: genre, difficulty: difficulty, 
-            answers: {}, questions: liveQuestions, token: roomToken 
+            answers: {}, questions: liveQuestions, token: roomToken,
+            currentQuestionIndex: 0,
+            status: 'playing', // NEW: Server tracks if the game is active!
+            disconnectTimer: null 
         };
         
         socket.join(roomId);
-        rooms[roomId].players.push({ id: socket.id, avatar, name: playerName, role: 'host' });
+        rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'host', connected: true });
+        
+        socketToRoom[socket.id] = roomId; 
+        
         socket.emit('room-created', roomId);
     });
 
-    socket.on('join-room', (roomId, avatar, playerName) => {
+    socket.on('join-room', (roomId, avatar, playerName, playerId) => {
         roomId = roomId.toUpperCase();
         if (!rooms[roomId]) return socket.emit('join-error', 'Room not found.');
+        
         socket.join(roomId);
-        rooms[roomId].players.push({ id: socket.id, avatar, name: playerName, role: 'guest' });
-        io.to(roomId).emit('game-start', rooms[roomId].players, rooms[roomId].genre, roomId, rooms[roomId].questions);
+        rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'guest', connected: true });
+        
+        socketToRoom[socket.id] = roomId;
+
+        const sanitizedQuestions = rooms[roomId].questions.map(q => ({ 
+            q: q.q, options: q.options, removableIndices: q.removableIndices 
+        }));
+        
+        io.to(roomId).emit('game-start', rooms[roomId].players, rooms[roomId].genre, roomId, sanitizedQuestions);
     });
 
     socket.on('send-chat', (roomId, data) => socket.to(roomId).emit('receive-chat', data));
@@ -139,14 +164,23 @@ io.on('connection', (socket) => {
         room.answers[socket.id] = { index: answerIndex, time: timeRemaining };
 
         if (Object.keys(room.answers).length === 2) {
-            io.to(roomId).emit('round-results', room.answers);
+            const correctAns = room.questions[room.currentQuestionIndex].answer;
+            io.to(roomId).emit('round-results', room.answers, correctAns);
             room.answers = {}; 
+            
+            // NEW: If we just finished round 6, mark the game as finished
+            if (room.currentQuestionIndex >= 5) {
+                room.status = 'finished';
+            }
         } else {
             io.to(roomId).emit('player-waiting');
         }
     });
 
-    socket.on('next-question', (roomId) => io.to(roomId).emit('load-next-question'));
+    socket.on('next-question', (roomId) => {
+        if (rooms[roomId]) rooms[roomId].currentQuestionIndex++;
+        io.to(roomId).emit('load-next-question')
+    });
 
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
         const room = rooms[roomId];
@@ -154,8 +188,15 @@ io.on('connection', (socket) => {
             room.genre = newGenre; 
             room.difficulty = newDifficulty;
             room.answers = {};
+            room.currentQuestionIndex = 0; 
+            room.status = 'playing'; // NEW: Reset status to active for the rematch
             room.questions = await fetchQuestionsFromAPI(newGenre, newDifficulty, room.token);
-            io.to(roomId).emit('restart-game', newGenre, room.questions);
+            
+            const sanitizedQuestions = room.questions.map(q => ({ 
+                q: q.q, options: q.options, removableIndices: q.removableIndices 
+            }));
+            
+            io.to(roomId).emit('restart-game', newGenre, sanitizedQuestions);
         }
     });
 
@@ -163,14 +204,58 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('enemy-powerup', type, playerName);
     });
 
-    socket.on('disconnect', () => {
-        for (const roomId in rooms) {
+    socket.on('reconnect-player', (roomId, playerId) => {
+        if (rooms[roomId]) {
             const room = rooms[roomId];
-            const playerIndex = room.players.findIndex(p => p.id === socket.id);
-            if (playerIndex !== -1) {
+            const player = room.players.find(p => p.playerId === playerId);
+            
+            if (player && !player.connected) {
+                player.id = socket.id;
+                player.connected = true;
+                socketToRoom[socket.id] = roomId;
+                socket.join(roomId);
+
+                if (room.players.every(p => p.connected)) {
+                    clearTimeout(room.disconnectTimer);
+                    room.disconnectTimer = null;
+                    io.to(roomId).emit('resume-game');
+                }
+            }
+        }
+    });
+
+    socket.on('disconnect', () => {
+        const roomId = socketToRoom[socket.id];
+        
+        if (roomId && rooms[roomId]) {
+            const room = rooms[roomId];
+            delete socketToRoom[socket.id]; 
+
+            const player = room.players.find(p => p.id === socket.id);
+            if (player) player.connected = false;
+
+            if (room.players.every(p => !p.connected)) {
+                clearTimeout(room.disconnectTimer);
+                delete rooms[roomId];
+                return;
+            }
+
+            // NEW: Only trigger the 10-second grace period if the game is actively playing!
+            if (room.players.length === 2 && room.status === 'playing') {
+                io.to(roomId).emit('pause-game', player ? player.name : 'Opponent');
+
+                room.disconnectTimer = setTimeout(() => {
+                    io.to(roomId).emit('default-win');
+                    
+                    room.players.forEach(p => {
+                        if (p.connected) delete socketToRoom[p.id];
+                    });
+                    delete rooms[roomId];
+                }, 10000); 
+            } else {
+                // If they are on the Match Complete screen, just return the remaining player to the menu safely.
                 socket.to(roomId).emit('opponent-disconnected');
                 delete rooms[roomId];
-                break;
             }
         }
     });

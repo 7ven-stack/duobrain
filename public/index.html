@@ -19,9 +19,23 @@
         <source src="calm-space-constellations-moewalls-com.mp4" type="video/mp4">
     </video>
 
-    <div id="inapp-warning" class="modal hidden-element" style="z-index: 99999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
-        <div class="modal-content card active-screen" style="display: flex; text-align: center; border: 2px solid #ef4444; padding: 40px 30px;">
-            <h2 style="color: #ef4444; font-size: 2rem; margin-bottom: 15px; text-align: center;">Action Required 🛑</h2>
+    <div id="entry-overlay" class="modal active-screen" style="z-index: 999999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: flex;">
+        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 50px;">
+            <h1 style="font-size: 3.5rem; margin-bottom: 10px; color: white;">DuoBrain</h1>
+            <p style="color: var(--primary-color); font-size: 1.2rem; font-weight: 700; animation: pulse 1.5s infinite;">Connecting to servers...</p>
+        </div>
+    </div>
+
+    <div id="pause-overlay" class="modal hidden-element" style="z-index: 99999; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);">
+        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 2px solid #f59e0b; padding: 50px;">
+            <h2 style="font-size: 3rem; color: #f59e0b; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.6);">Game Paused</h2>
+            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 600; animation: pulse 1.5s infinite;">Opponent disconnected. Waiting 10s...</p>
+        </div>
+    </div>
+
+    <div id="inapp-warning" class="modal hidden-element" style="z-index: 9999999; background: rgba(15, 23, 42, 0.98);">
+        <div class="modal-content card" style="display: flex; text-align: center; border: 2px solid #ef4444; padding: 40px 30px;">
+            <h2 style="color: #ef4444; font-size: 2rem; margin-bottom: 15px;">Action Required</h2>
             <p style="color: var(--text-main); font-size: 1.05rem; line-height: 1.6; margin-bottom: 25px;">
                 Messenger's built-in browser blocks multiplayer games from working properly.
             </p>
@@ -36,16 +50,13 @@
 
     <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
-            <button id="close-rules-btn" class="close-btn" title="Close">&times;</button>
+            <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">&times;</button>
             <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
-            
             <div class="rules-scroll">
                 <h3>The Basics</h3>
                 <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. The first to answer correctly wins the round's point!</p>
-                
                 <h3>Tie-Breakers & Sudden Death</h3>
                 <p>If both players answer correctly, the player who answered <strong>fastest</strong> gets the point. Round 6 is always Sudden Death—the pressure is doubled with only 7 seconds on the clock!</p>
-                
                 <h3>Power-Ups</h3>
                 <p>You can use each power-up exactly once per match. Use them strategically to disrupt your opponent or save yourself!</p>
                 <ul>
@@ -60,7 +71,7 @@
     <main class="app-container">
         
         <section id="menu-screen" class="card active-screen">
-            <button id="help-btn" class="help-btn" title="How to Play">?</button>
+            <button id="help-btn" class="help-btn" title="How to Play" aria-label="Open How to Play">?</button>
             
             <h1>DuoBrain <span class="badge">LIVE</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
@@ -68,38 +79,41 @@
             <div class="split-layout">
                 <div class="panel">
                     <h3>Host a Game</h3>
-                    <input type="text" id="host-name" placeholder="Your Name">
+                    <input type="text" id="host-name" placeholder="Your Name" aria-label="Your Name">
+                    
                     <div class="avatar-selector">
-                        <div class="avatar-option selected" data-avatar="🦊">🦊</div>
-                        <div class="avatar-option" data-avatar="🐼">🐼</div>
-                        <div class="avatar-option" data-avatar="🐯">🐯</div>
-                        <div class="avatar-option" data-avatar="🐸">🐸</div>
+                        <div class="avatar-option selected" data-avatar="🦊" aria-label="Fox Avatar" role="button" tabindex="0">🦊</div>
+                        <div class="avatar-option" data-avatar="🐼" aria-label="Panda Avatar" role="button" tabindex="0">🐼</div>
+                        <div class="avatar-option" data-avatar="🐯" aria-label="Tiger Avatar" role="button" tabindex="0">🐯</div>
+                        <div class="avatar-option" data-avatar="🐸" aria-label="Frog Avatar" role="button" tabindex="0">🐸</div>
                     </div>
                     
                     <div class="genre-selector" id="host-genre" style="margin-bottom: 10px;"></div>
 
                     <h4 style="margin: 10px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
                     <div class="genre-selector" id="host-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
-                        <div class="genre-option selected" data-difficulty="any">Any</div>
-                        <div class="genre-option" data-difficulty="easy">Easy</div>
-                        <div class="genre-option" data-difficulty="medium">Med</div>
-                        <div class="genre-option" data-difficulty="hard">Hard</div>
+                        <div class="genre-option selected" data-difficulty="any" aria-label="Any Difficulty" role="button" tabindex="0">Any</div>
+                        <div class="genre-option" data-difficulty="easy" aria-label="Easy Difficulty" role="button" tabindex="0">Easy</div>
+                        <div class="genre-option" data-difficulty="medium" aria-label="Medium Difficulty" role="button" tabindex="0">Med</div>
+                        <div class="genre-option" data-difficulty="hard" aria-label="Hard Difficulty" role="button" tabindex="0">Hard</div>
                     </div>
 
-                    <button id="create-btn" class="primary-btn">Create Room</button>
+                    <button id="create-btn" class="primary-btn" aria-label="Create Room">Create Room</button>
                 </div>
                 <div class="divider">OR</div>
                 <div class="panel">
                     <h3>Join a Game</h3>
-                    <input type="text" id="guest-name" placeholder="Your Name">
+                    <input type="text" id="guest-name" placeholder="Your Name" aria-label="Your Name">
+                    
                     <div class="avatar-selector">
-                        <div class="avatar-option selected" data-avatar="🦊">🦊</div>
-                        <div class="avatar-option" data-avatar="🐼">🐼</div>
-                        <div class="avatar-option" data-avatar="🐯">🐯</div>
-                        <div class="avatar-option" data-avatar="🐸">🐸</div>
+                        <div class="avatar-option selected" data-avatar="🦊" aria-label="Fox Avatar" role="button" tabindex="0">🦊</div>
+                        <div class="avatar-option" data-avatar="🐼" aria-label="Panda Avatar" role="button" tabindex="0">🐼</div>
+                        <div class="avatar-option" data-avatar="🐯" aria-label="Tiger Avatar" role="button" tabindex="0">🐯</div>
+                        <div class="avatar-option" data-avatar="🐸" aria-label="Frog Avatar" role="button" tabindex="0">🐸</div>
                     </div>
-                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4">
-                    <button id="join-btn" class="secondary-btn">Join Room</button>
+                    
+                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4" aria-label="Room Code">
+                    <button id="join-btn" class="secondary-btn" aria-label="Join Room">Join Room</button>
 
                     <div class="quick-rules">
                         <h4>Did You Know?</h4>
@@ -115,8 +129,8 @@
         <section id="lobby-screen" class="card hidden-screen" style="text-align: center;">
             <h2>Waiting for Opponent</h2>
             <p class="subtitle">Send this code to your friend:</p>
-            <div id="room-code-display" class="massive-code">----</div>
-            <button id="copy-link-btn" class="secondary-btn" style="max-width: 300px; margin: 0 auto;">🔗 Copy Invite Link</button>
+            <div id="room-code-display" class="massive-code" aria-label="Your Room Code">----</div>
+            <button id="copy-link-btn" class="secondary-btn" style="max-width: 300px; margin: 0 auto;" aria-label="Copy Invite Link">Copy Invite Link</button>
         </section>
 
         <section id="countdown-screen" class="card hidden-screen" style="text-align: center; justify-content: center;">
@@ -128,7 +142,7 @@
             <div class="quiz-fixed-header">
                 <div class="profiles-container">
                     <div class="profile-card">
-                        <div id="my-avatar-display" class="avatar-large">🦊</div>
+                        <div id="my-avatar-display" class="avatar-large" aria-hidden="true">🦊</div>
                         <span id="my-label" class="profile-name">You</span>
                     </div>
                     
@@ -138,7 +152,7 @@
                     </div>
 
                     <div class="profile-card">
-                        <div id="remote-avatar-display" class="avatar-large">🐼</div>
+                        <div id="remote-avatar-display" class="avatar-large" aria-hidden="true">🐼</div>
                         <span id="remote-label" class="profile-name">Opponent</span>
                     </div>
                 </div>
@@ -156,9 +170,9 @@
             </div>
 
             <div class="powerups-panel" id="powerups-ui">
-                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers">Decrypt</button>
-                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds">Overclock</button>
-                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen">Glitch</button>
+                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers" aria-label="Use Decrypt Powerup">Decrypt</button>
+                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds" aria-label="Use Overclock Powerup">Overclock</button>
+                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen" aria-label="Use Glitch Powerup">Glitch</button>
             </div>
             
             <div class="quiz-scroll-content">
@@ -169,16 +183,16 @@
             </div>
 
             <div class="chat-container">
-                <div id="chat-messages" class="chat-messages"></div>
+                <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
                 <div class="chat-input-area">
                     <div class="input-with-emoji">
-                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
-                        <button id="emoji-btn" title="Add Emoji">
+                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" aria-label="Chat Input">
+                        <button id="emoji-btn" title="Add Emoji" aria-label="Open Emoji Picker">
                             <img src="happy.png" alt="smiley" class="custom-emoji-icon">
                         </button>
-                        <div id="emoji-picker" class="hidden-element"></div>
+                        <div id="emoji-picker" class="hidden-element" role="menu"></div>
                     </div>
-                    <button id="send-chat-btn">Send</button>
+                    <button id="send-chat-btn" aria-label="Send Chat">Send</button>
                 </div>
             </div>
         </section>
