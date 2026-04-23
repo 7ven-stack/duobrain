@@ -104,7 +104,7 @@ const funFacts = [
     "The first computer mouse was invented in 1964 and was made out of carved wood.",
     "The highest possible score in Pac-Man is exactly 3,333,360 points.",
     "A day on Venus is actually longer than a year on Venus.",
-    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
+    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs tombs that is still edible.",
     "Lightning strikes the Earth about 100 times every single second.",
     "Sharks have been around for over 400 million years, meaning they existed before trees.",
     "The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
@@ -909,24 +909,9 @@ const screens = {
 const timerDisplay = document.getElementById('timer-display');
 const optsContainer = document.getElementById('options-container');
 
-// FIX: Just controls the footer now
 function switchScreen(screenToActivate) {
     Object.values(screens).forEach(s => s.classList.replace('active-screen', 'hidden-screen'));
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
-    
-    const footer = document.getElementById('global-footer');
-    
-    if (screenToActivate === screens.menu || screenToActivate === screens.lobby) {
-        if (footer) {
-            footer.style.opacity = '1';
-            footer.style.pointerEvents = 'auto';
-        }
-    } else {
-        if (footer) {
-            footer.style.opacity = '0';
-            footer.style.pointerEvents = 'none';
-        }
-    }
 }
 
 // --- RULES MODAL LOGIC ---
