@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,7 +12,7 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 // Connect to MongoDB using an Environment Variable for security
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://duobrain_user:2pxKBzV2pEPXGsVS@duobraincluster.qfi09ao.mongodb.net/?appName=DuoBrainCluster";
+const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("Connected to DuoBrain MongoDB!"))
@@ -52,7 +53,6 @@ function getFallbackQuestions() {
     ];
 }
 
-// 🚀 BUG-PROOF Database Query
 async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     const categoryId = categoryMap[genre] || 9; 
     
@@ -62,15 +62,11 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     }
 
     try {
-        // Attempt 1: Grab 6 random questions matching category AND difficulty
         let rawQuestions = await Question.aggregate([
             { $match: matchFilter },
             { $sample: { size: 6 } }
         ]);
 
-        // ✨ THE SMART FALLBACK FIX ✨
-        // If they wanted a specific difficulty, but we found LESS THAN 6 questions,
-        // we drop the difficulty requirement and just pull ANY 6 questions for that category to save the match!
         if ((!rawQuestions || rawQuestions.length < 6) && difficulty !== 'any') {
             console.log(`Not enough ${difficulty} questions for category ${categoryId}. Smart Fallback to ANY difficulty.`);
             rawQuestions = await Question.aggregate([
@@ -79,13 +75,11 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
             ]);
         }
 
-        // If we STILL don't have 6 questions (even on ANY difficulty), trigger the ultimate 2+2 fallback.
         if (!rawQuestions || rawQuestions.length < 6) {
             console.log(`Database empty for category ${categoryId}. Using fallbacks.`);
             return getFallbackQuestions();
         }
 
-        // Format the 6 successful questions for the game
         return rawQuestions.map(item => {
             const question = he.decode(item.question);
             const correctAnswer = he.decode(item.correct_answer);

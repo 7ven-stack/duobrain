@@ -1,7 +1,7 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 
-// IMPORTANT: Put your real password here!
-const MONGO_URI = "mongodb+srv://duobrain_user:2pxKBzV2pEPXGsVS@duobraincluster.qfi09ao.mongodb.net/?appName=DuoBrainCluster";
+const MONGO_URI = process.env.MONGO_URI;
 
 const QuestionSchema = new mongoose.Schema({
     category: Number,
@@ -12,7 +12,6 @@ const QuestionSchema = new mongoose.Schema({
 });
 const Question = mongoose.model('Question', QuestionSchema);
 
-// Every category ID your game uses
 const categories = [17, 19, 12, 22, 23, 11, 15, 21, 20, 18, 31, 10, 14, 16, 29, 30, 25, 27, 9, 28, 24, 26, 13, 32];
 const difficulties = ['easy', 'medium', 'hard'];
 
@@ -33,7 +32,6 @@ async function runUltimateSeeder() {
                 const diff = difficulties[d];
                 console.log(`Fetching Category ${catId} | Difficulty: ${diff.toUpperCase()}...`);
                 
-                // We ask specifically for 50 questions of this exact difficulty
                 const url = `https://opentdb.com/api.php?amount=50&category=${catId}&difficulty=${diff}&type=multiple`;
                 
                 const response = await fetch(url);
@@ -52,18 +50,16 @@ async function runUltimateSeeder() {
                     totalSaved += formatted.length;
                     console.log(`   Saved ${formatted.length} questions! (Total: ${totalSaved})`);
                 } else {
-                    // This happens if OpenTDB simply doesn't have enough questions for this niche
                     console.log(`   OpenTDB has NO ${diff.toUpperCase()} questions for Category ${catId}.`);
                 }
 
-                // Wait 5 seconds to prevent getting IP banned by OpenTDB
                 await delay(5000); 
             }
         }
 
-        console.log(`\n🏆 ULTIMATE SEEDER COMPLETE! Added ${totalSaved} new questions to your database.`);
+        console.log(`\nULTIMATE SEEDER COMPLETE! Added ${totalSaved} new questions to your database.`);
     } catch (err) {
-        console.error("❌ Error:", err);
+        console.error("Error:", err);
     } finally {
         mongoose.disconnect();
     }
