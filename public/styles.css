@@ -10,7 +10,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
 
-#bg-video {
+#bg-image {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     z-index: -1; object-fit: cover; filter: brightness(0.3);
 }
@@ -72,7 +72,6 @@ body {
 
 .rules-scroll { 
     overflow-y: auto; padding-right: 15px; text-align: left; 
-    scrollbar-width: thin; scrollbar-color: var(--primary-color) transparent; 
 }
 .rules-scroll h3 { color: #cbd5e1; font-size: 1.1rem; margin: 20px 0 10px 0; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }
 .rules-scroll p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 10px; }
@@ -83,10 +82,6 @@ body {
     border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); line-height: 1.5;
 }
 .rules-scroll li strong { color: var(--primary-color); font-size: 1rem; margin-bottom: 2px;}
-
-.rules-scroll::-webkit-scrollbar { width: 6px; } 
-.rules-scroll::-webkit-scrollbar-track { background: transparent; margin: 8px 0; } 
-.rules-scroll::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 10px; }
 
 .card {
     background: var(--surface-color);
@@ -207,8 +202,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     display: flex; 
     flex-direction: column; 
     gap: 12px; 
-    scrollbar-width: thin; 
-    scrollbar-color: var(--primary-color) transparent; 
 }
 
 .chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 18px; font-size: 0.85rem; line-height: 1.4; text-align: left; box-shadow: 0 4px 10px rgba(0,0,0,0.2); overflow-wrap: break-word; word-break: break-word; }
@@ -231,10 +224,6 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
 
 #send-chat-btn { width: auto; padding: 0 25px; font-size: 0.85rem; background: var(--primary-color); border-radius: 12px; font-weight: 800; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
 #send-chat-btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
-
-.chat-messages::-webkit-scrollbar { width: 6px; } 
-.chat-messages::-webkit-scrollbar-track { background: transparent; margin: 8px 0; } 
-.chat-messages::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 10px; }
 
 /* ========================================================= */
 
@@ -342,6 +331,46 @@ button { width: 100%; padding: 18px; border: none; border-radius: 14px; font-siz
     .rules-scroll li { padding: 10px; font-size: 0.75rem; }
     .rules-scroll li strong { font-size: 0.85rem; }
     
-    /* NEW: Adjust series badge to prevent text wrapping on narrow phones */
     .series-badge { font-size: 0.65rem; padding: 4px 8px; letter-spacing: 0; }
+}
+
+/* =========================================================
+   AUTO-HIDING SCROLLBARS (CLEAN, SPECIFIC FIX)
+   ========================================================= */
+
+.rules-scroll, .chat-messages {
+    scrollbar-width: thin; 
+    scrollbar-color: transparent transparent; 
+    transition: scrollbar-color 0.3s ease; 
+}
+
+.rules-scroll:hover, .chat-messages:hover {
+    scrollbar-color: rgba(99, 102, 241, 0.6) transparent;
+}
+
+.rules-scroll::-webkit-scrollbar, 
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.rules-scroll::-webkit-scrollbar-track, 
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+}
+
+.rules-scroll::-webkit-scrollbar-thumb, 
+.chat-messages::-webkit-scrollbar-thumb {
+    background: transparent; 
+    border-radius: 10px;
+}
+
+.rules-scroll:hover::-webkit-scrollbar-thumb, 
+.chat-messages:hover::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4); 
+}
+
+.rules-scroll::-webkit-scrollbar-thumb:hover, 
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.8);
 }

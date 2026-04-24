@@ -1,11 +1,16 @@
 let socket = null;
 const connectionStartTime = Date.now();
 
-const myPersistentId = Math.random().toString(36).substring(2, 15);
+// Persistent user ID logic
+let myPersistentId = localStorage.getItem('duobrain_user_id');
+if (!myPersistentId) {
+    myPersistentId = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('duobrain_user_id', myPersistentId);
+}
 
 const gameState = {
     roomId: null, genre: null, difficulty: null, myPlayerId: null, role: null,
-    currentQuestionIndex: 0, myScore: 0, enemyScore: 0, myName: "Me", questions: [],
+    currentQuestionIndex: 0, myScore: 0, enemyScore: 0, myName: "Player", questions: [],
     seriesMyScore: 0, seriesEnemyScore: 0,
     myWager: null, enemyWager: null
 };
@@ -22,7 +27,19 @@ let isWaitingForOpponent = false;
 let isMatchFinished = false; 
 
 let pauseTimerInterval = null;
-let pauseCountdown = 10;
+let pauseCountdown = 30; // 30 second grace period for disconnects
+
+// --- SAFE BACKGROUND UPDATER ---
+function updateBackground(isSuddenDeath) {
+    const bgEl = document.getElementById('bg-image') || document.getElementById('bg-video');
+    if (!bgEl) return; 
+    
+    if (isSuddenDeath) {
+        bgEl.classList.add('sudden-death-bg');
+    } else {
+        bgEl.classList.remove('sudden-death-bg');
+    }
+}
 
 // --- BULLETPROOF AUDIO ENGINE ---
 class MultiAudio {
@@ -86,8 +103,6 @@ function startBGM() {
 }
 window.addEventListener('click', startBGM);
 
-// ---------------------------------
-
 function showToast(message) {
     const tc = document.getElementById('toast-container');
     if(!tc) return;
@@ -98,13 +113,84 @@ function showToast(message) {
     setTimeout(() => t.remove(), 3500);
 }
 
+// --- PROFILE SETUP LOGIC ---
+let mySelectedAvatar = "🦊"; 
+let mySelectedGenre = "science"; 
+let mySelectedDifficulty = "any";
+
+const profileOverlay = document.getElementById('profile-setup-overlay');
+const setupNameInput = document.getElementById('setup-name');
+const saveProfileBtn = document.getElementById('save-profile-btn');
+
+function initProfile() {
+    const savedName = localStorage.getItem('duobrain_name');
+    let savedAvatar = localStorage.getItem('duobrain_avatar');
+
+    if (savedAvatar === 'Fox') savedAvatar = '🦊';
+    else if (savedAvatar === 'Panda') savedAvatar = '🐼';
+    else if (savedAvatar === 'Tiger') savedAvatar = '🐯';
+    else if (savedAvatar === 'Frog') savedAvatar = '🐸';
+
+    if (savedName && savedAvatar) {
+        gameState.myName = savedName;
+        mySelectedAvatar = savedAvatar;
+        localStorage.setItem('duobrain_avatar', mySelectedAvatar);
+        updateMiniProfileDisplay();
+    }
+}
+
+function updateMiniProfileDisplay() {
+    const disp = document.getElementById('menu-profile-display');
+    if (disp) {
+        disp.innerHTML = `<span style="font-size:1.2rem; margin-right:8px;">${mySelectedAvatar}</span> <strong style="color:white;">${gameState.myName}</strong>`;
+    }
+}
+
+document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(opt => {
+    opt.onclick = (e) => {
+        playSound(sfx.click);
+        document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => o.classList.remove('selected'));
+        e.target.classList.add('selected');
+        mySelectedAvatar = e.target.getAttribute('data-avatar');
+    };
+});
+
+saveProfileBtn.onclick = () => {
+    const n = setupNameInput.value.trim();
+    if (!n) {
+        showToast("Please enter a name!");
+        return;
+    }
+    playSound(sfx.click);
+    gameState.myName = n;
+    localStorage.setItem('duobrain_name', n);
+    localStorage.setItem('duobrain_avatar', mySelectedAvatar);
+    
+    profileOverlay.classList.add('hidden-element');
+    profileOverlay.style.display = 'none';
+    updateMiniProfileDisplay();
+};
+
+document.getElementById('menu-profile-display').onclick = () => {
+    playSound(sfx.click);
+    setupNameInput.value = gameState.myName;
+    
+    document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => {
+        o.classList.remove('selected');
+        if (o.getAttribute('data-avatar') === mySelectedAvatar) o.classList.add('selected');
+    });
+    
+    profileOverlay.classList.remove('hidden-element');
+    profileOverlay.style.display = 'flex';
+};
+
 // --- DYNAMIC FUN FACTS LOGIC ---
 const funFacts = [
     "The human brain generates about 20 watts of electricity—enough to power a dim light bulb!",
     "The first computer mouse was invented in 1964 and was made out of carved wood.",
     "The highest possible score in Pac-Man is exactly 3,333,360 points.",
     "A day on Venus is actually longer than a year on Venus.",
-    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs tombs that is still edible.",
+    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
     "Lightning strikes the Earth about 100 times every single second.",
     "Sharks have been around for over 400 million years, meaning they existed before trees.",
     "The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
@@ -113,13 +199,13 @@ const funFacts = [
 ];
 
 const proTips = [
-    "Save your Decrypt power-up for Round 5's Wager Phase to secure a massive point swing!",
+    "Save your Decrypt power-up for Round 5's Clutch Phase to secure a massive point swing!",
     "Using the Glitch power-up during Sudden Death causes maximum panic.",
     "Overclock adds 8 seconds to your timer. Use it when you need time to think!",
-    "Wager Rounds can make or break a match. Don't bet 3 points unless you're confident.",
+    "Clutch Rounds can make or break a match. Don't risk 3 points unless you're confident.",
     "In Sudden Death, speed matters just as much as accuracy. Be the first to answer!",
     "If both players answer correctly, the one who answered faster gets the point.",
-    "Pay attention to the Category before Round 5 starts so you can plan your wager.",
+    "Pay attention to the Category before Round 5 starts so you can plan your risk.",
     "You only get one of each power-up per match. Don't waste them early!",
     "A Glitch power-up shakes the enemy's screen and blurs their answers for 5 seconds.",
     "The host controls the category and difficulty. Pick your strongest subjects!"
@@ -164,10 +250,6 @@ function initProTips() {
         };
     }
 }
-
-let mySelectedAvatar = "🦊"; 
-let mySelectedGenre = "science"; 
-let mySelectedDifficulty = "any";
 
 const genrePacks = [
     ["science", "math", "music", "geography", "history", "movies", "gaming", "sports", "mythology"],
@@ -234,13 +316,18 @@ function injectDailyGenres(containerId, isRematch = false) {
     return selGenreForRematch; 
 }
 
-
 // --- NETWORK EVENTS ---
 socket = io('/');
 
 socket.on('connect', () => {
     const overlay = document.getElementById('entry-overlay');
     
+    const savedRoom = localStorage.getItem('duobrain_active_room');
+    if (savedRoom) {
+        gameState.roomId = savedRoom;
+        socket.emit('reconnect-player', savedRoom, myPersistentId);
+    }
+
     if (overlay && !overlay.classList.contains('hidden-element')) {
         const ping = Date.now() - connectionStartTime;
         const statusText = overlay.querySelector('p');
@@ -250,11 +337,14 @@ socket.on('connect', () => {
             statusText.style.color = '#10b981'; 
             statusText.style.animation = 'none'; 
         }
-        setTimeout(() => overlay.classList.add('hidden-element'), 600); 
-    }
-
-    if (gameState.roomId) {
-        socket.emit('reconnect-player', gameState.roomId, myPersistentId);
+        
+        setTimeout(() => {
+            overlay.classList.add('hidden-element');
+            if (!localStorage.getItem('duobrain_name')) {
+                profileOverlay.style.display = 'flex';
+                profileOverlay.classList.remove('hidden-element');
+            }
+        }, 600); 
     }
 });
 
@@ -273,7 +363,7 @@ socket.on('pause-game', (playerName) => {
     const pauseText = document.getElementById('pause-text');
     
     if (pauseModal && pauseText) {
-        pauseCountdown = 10;
+        pauseCountdown = 30; // 30s UI grace period
         pauseText.textContent = `${playerName} disconnected. Waiting ${pauseCountdown}s...`;
         pauseModal.classList.remove('hidden-element');
         
@@ -302,6 +392,67 @@ socket.on('resume-game', () => {
     if (pauseModal) pauseModal.classList.add('hidden-element');
 });
 
+// SENIOR DEV FIX: P2P State Recovery system. The player who stayed sends their state.
+socket.on('request-state-sync', (targetId) => {
+    const syncData = {
+        roomId: gameState.roomId,
+        genre: gameState.genre,
+        questions: gameState.questions,
+        currentIndex: gameState.currentQuestionIndex,
+        myScore: gameState.enemyScore, // Reversed intentionally!
+        enemyScore: gameState.myScore,
+        myWager: gameState.enemyWager || null,
+        enemyWager: gameState.myWager || null,
+        avatarMe: document.getElementById('remote-avatar-display').textContent,
+        avatarThem: document.getElementById('my-avatar-display').textContent,
+        nameThem: gameState.myName
+    };
+    socket.emit('sync-state', targetId, syncData);
+});
+
+// SENIOR DEV FIX: Reconnecting player receives state and instantly rebuilds the UI
+socket.on('recover-game', (data) => {
+    gameState.roomId = data.roomId;
+    gameState.genre = data.genre;
+    gameState.questions = data.questions;
+    gameState.currentQuestionIndex = data.currentIndex;
+    gameState.myScore = data.myScore;
+    gameState.enemyScore = data.enemyScore;
+    gameState.myWager = data.myWager;
+    gameState.enemyWager = data.enemyWager;
+
+    document.getElementById('my-avatar-display').textContent = data.avatarMe;
+    document.getElementById('remote-avatar-display').textContent = data.avatarThem;
+    document.getElementById('remote-label').textContent = data.nameThem;
+
+    document.getElementById('p1-score-display').textContent = `Me: ${gameState.myScore}`;
+    document.getElementById('p2-score-display').textContent = `Opponent: ${gameState.enemyScore}`;
+
+    document.getElementById('help-btn').style.display = 'none';
+    document.querySelector('.chat-container').classList.remove('expanded-chat');
+    
+    const profileSetup = document.getElementById('profile-setup-overlay');
+    if (profileSetup) profileSetup.classList.add('hidden-element');
+
+    if (gameState.currentQuestionIndex === 4 && !gameState.myWager) {
+        document.getElementById('wager-category').textContent = gameState.genre;
+        switchScreen(screens.wager);
+        document.querySelectorAll('.wager-btn').forEach(b => {
+            b.disabled = false; b.style.opacity = '1';
+        });
+        const controls = document.getElementById('wager-controls');
+        if (controls) { controls.style.opacity = '1'; controls.style.pointerEvents = 'auto'; }
+        const waitText = document.getElementById('wager-wait-text');
+        waitText.textContent = "Choose quickly! (Recovered)";
+        waitText.style.color = "var(--primary-color)";
+        waitText.classList.remove('hidden-element');
+    } else {
+        switchScreen(screens.quiz);
+        renderQuestion();
+    }
+});
+
+
 socket.on('default-win', () => {
     clearInterval(questionTimer);
     clearInterval(pauseTimerInterval); 
@@ -324,6 +475,7 @@ socket.on('default-win', () => {
     
     document.getElementById('back-menu-forfeit').onclick = () => {
         playSound(sfx.click);
+        localStorage.removeItem('duobrain_active_room');
         setTimeout(() => window.location.reload(), 150);
     };
     
@@ -338,6 +490,7 @@ socket.on('default-win', () => {
 socket.on('room-created', id => { 
     gameState.role = 'host';
     gameState.roomId = id;
+    localStorage.setItem('duobrain_active_room', id);
     document.getElementById('room-code-display').textContent = id; 
     switchScreen(screens.lobby); 
 });
@@ -345,6 +498,7 @@ socket.on('room-created', id => {
 socket.on('room-joined', (id, hostGenre, hostDiff) => {
     gameState.roomId = id;
     gameState.role = 'guest';
+    localStorage.setItem('duobrain_active_room', id);
     document.getElementById('room-code-display').textContent = id;
     
     document.getElementById('lobby-genre').style.pointerEvents = 'none';
@@ -401,10 +555,19 @@ socket.on('rematch-settings-updated', (genre, diff) => {
     });
 });
 
-
 socket.on('join-error', (errorMessage) => {
     showToast(errorMessage);
     playSound(sfx.lose);
+});
+
+socket.on('game-start-error', (errorMsg) => {
+    showToast(errorMsg);
+    const btn = document.getElementById('start-game-btn');
+    if(btn) {
+        btn.textContent = "Start Match";
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    }
 });
 
 socket.on('opponent-disconnected', () => {
@@ -415,6 +578,7 @@ socket.on('opponent-disconnected', () => {
     clearInterval(pauseTimerInterval); 
     showToast(`Opponent disconnected! Returning to menu...`);
     playSound(sfx.lose);
+    localStorage.removeItem('duobrain_active_room');
     setTimeout(() => window.location.reload(), 2500);
 });
 
@@ -423,7 +587,8 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
     isMatchFinished = false;
     document.getElementById('help-btn').style.display = 'none'; 
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
-    document.getElementById('bg-video').classList.remove('sudden-death-bg'); 
+    
+    updateBackground(false); 
     
     gameState.roomId = roomId; gameState.genre = genre; gameState.myPlayerId = socket.id; gameState.questions = sanitizedQuestions;
     const me = players.find(p => p.id === socket.id); const them = players.find(p => p.id !== socket.id);
@@ -438,11 +603,9 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
 
 socket.on('start-wager-phase', (genre) => {
     document.getElementById('wager-category').textContent = genre;
-    
     const controls = document.getElementById('wager-controls');
     const waitText = document.getElementById('wager-wait-text');
     
-    // Phase 0: Reset the UI and lock the buttons
     if (controls) {
         controls.style.opacity = '0.3';
         controls.style.pointerEvents = 'none';
@@ -456,7 +619,6 @@ socket.on('start-wager-phase', (genre) => {
     gameState.myWager = null;
     switchScreen(screens.wager);
 
-    // Phase 1: The 3-Second "READ THE CATEGORY" Warning
     let prepTime = 3;
     waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
     waitText.classList.remove('hidden-element');
@@ -467,11 +629,9 @@ socket.on('start-wager-phase', (genre) => {
         prepTime--;
         if (prepTime > 0) {
             waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
-            playSound(sfx.tick); // Tick down the warning
+            playSound(sfx.tick); 
         } else {
             clearInterval(window.wagerInterval);
-            
-            // Phase 2: Unlock the buttons and start the 10-second betting clock
             if (controls) {
                 controls.style.opacity = '1';
                 controls.style.pointerEvents = 'auto';
@@ -480,7 +640,7 @@ socket.on('start-wager-phase', (genre) => {
             let wTime = 10;
             waitText.innerHTML = `Choose quickly! (${wTime}s)`;
             waitText.style.color = "var(--primary-color)";
-            playSound(sfx.notif); // Play a bright chime when betting opens
+            playSound(sfx.notif); 
             
             window.wagerInterval = setInterval(() => {
                 wTime--;
@@ -488,7 +648,6 @@ socket.on('start-wager-phase', (genre) => {
                 if (wTime <= 0) {
                     clearInterval(window.wagerInterval);
                     if (!gameState.myWager) {
-                        // Auto-bet 1 point if they panic and run out of time
                         document.querySelector('.wager-btn[data-wager="1"]').click(); 
                     }
                 }
@@ -498,12 +657,13 @@ socket.on('start-wager-phase', (genre) => {
 });
 
 socket.on('wager-phase-complete', (wagers) => {
-    gameState.myWager = wagers[socket.id];
-    const enemyId = Object.keys(wagers).find(id => id !== socket.id);
+    // SENIOR DEV FIX: Read wagers from persistent IDs
+    gameState.myWager = wagers[myPersistentId];
+    const enemyId = Object.keys(wagers).find(id => id !== myPersistentId);
     gameState.enemyWager = wagers[enemyId];
     
     const waitText = document.getElementById('wager-wait-text');
-    waitText.textContent = "Wagers Locked! Prepare for battle...";
+    waitText.textContent = "Points Locked! Prepare for battle...";
     waitText.style.color = "#10b981"; 
     waitText.classList.remove('hidden-element');
     playSound(sfx.win); 
@@ -512,18 +672,19 @@ socket.on('wager-phase-complete', (wagers) => {
 socket.on('round-results', (answers, correctAns) => {
     clearInterval(questionTimer);
     stopSound(sfx.tick); 
-    
     isWaitingForOpponent = false;
-    
     timerDisplay.classList.add('hidden-element');
     optsContainer.classList.remove('options-grid'); 
 
     const q = gameState.questions[gameState.currentQuestionIndex];
     q.answer = correctAns; 
 
-    const myData = answers[socket.id];
-    const enemyId = Object.keys(answers).find(id => id !== socket.id);
+    // SENIOR DEV FIX: Read answers from persistent IDs to survive disconnects
+    const myData = answers[myPersistentId];
+    const enemyId = Object.keys(answers).find(id => id !== myPersistentId);
     const enemyData = answers[enemyId];
+    
+    if (!myData || !enemyData) return; // Failsafe check
 
     const myAns = myData.index;
     const enemyAns = enemyData.index;
@@ -569,10 +730,7 @@ socket.on('round-results', (answers, correctAns) => {
         if (gameState.currentQuestionIndex === 4) {
             let myWagerMod = myAns === q.answer ? `+${gameState.myWager}` : `-${gameState.myWager}`;
             let enemyWagerMod = enemyAns === q.answer ? `+${gameState.enemyWager}` : `-${gameState.enemyWager}`;
-            wagerText = `
-                <p style="margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: #f59e0b;">
-                    WAGER RESULTS: You ${myWagerMod} | Enemy ${enemyWagerMod}
-                </p>`;
+            wagerText = `<p style="margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: #f59e0b;">CLUTCH RESULTS: You ${myWagerMod} | Enemy ${enemyWagerMod}</p>`;
         }
 
         optsContainer.innerHTML = `
@@ -600,10 +758,8 @@ socket.on('round-results', (answers, correctAns) => {
              optsContainer.appendChild(waitingText);
         }
     } else {
-        
         isMatchFinished = true;
         if (socket) socket.emit('match-finished', gameState.roomId);
-
         document.getElementById('powerups-ui').style.display = 'none'; 
         document.getElementById('question-text').textContent = "Match Complete";
         document.getElementById('turn-indicator').textContent = "Final";
@@ -620,16 +776,10 @@ socket.on('round-results', (answers, correctAns) => {
         if (res === "Victory") playSound(sfx.win); else playSound(sfx.lose);
         setTimeout(() => { sfx.bgm.volume = 0.3; }, 4000);
 
-        let flavorText = "";
-        if (res === "Victory") flavorText = "Great job, you dominated!";
-        else if (res === "Defeat") flavorText = "Better luck next time!";
-        else flavorText = "A perfectly matched battle!";
-
         optsContainer.innerHTML = `
             <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 10px;">
                 <p style="margin-bottom:8px; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Match Summary</p>
                 <p style="font-size: 1.2rem; font-weight: 800; margin-bottom: 5px;">Final Score: <span style="color: var(--primary-color);">${gameState.myScore} - ${gameState.enemyScore}</span></p>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">${flavorText}</p>
             </div>
             <div class="winner-banner"><h2 class="winner-text ${cls}">${res}</h2></div>
         `;
@@ -637,7 +787,6 @@ socket.on('round-results', (answers, correctAns) => {
         if (gameState.role === 'host') {
             const rb = document.createElement('div');
             rb.className = 'rematch-box';
-            
             rb.innerHTML = `
                 <h3 style="margin-bottom: 15px;">Play Again?</h3>
                 <div class="genre-selector" id="rematch-genre" style="margin-bottom: 10px;"></div>
@@ -649,58 +798,38 @@ socket.on('round-results', (answers, correctAns) => {
                 </div>
             `;
             optsContainer.appendChild(rb);
-            
             let selGenre = injectDailyGenres('rematch-genre', true);
-
             const rdiff = document.getElementById('rematch-difficulty');
             let selDiff = "any";
-            
             [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
                 const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
-                
                 p.setAttribute('data-difficulty', d.id);
-                
                 p.onclick = (e) => {
                     playSound(sfx.click);
                     rdiff.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
                     e.target.classList.add('selected'); selDiff = d.id;
-                    
                     const activeGenreBtn = document.querySelector('#rematch-genre .genre-option.selected');
                     const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
                     socket.emit('update-rematch-settings', gameState.roomId, finalGenre, selDiff);
                 };
-                
-                p.setAttribute('role', 'button');
-                p.setAttribute('tabindex', '0');
-                p.setAttribute('aria-label', `${d.text} Difficulty`);
-                p.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.click(); }};
-
-                if(d.id === gameState.difficulty) {
-                    p.classList.add('selected');
-                    selDiff = d.id;
-                } else if (!gameState.difficulty && d.id === 'any') {
-                    p.classList.add('selected');
-                }
+                if(d.id === gameState.difficulty) { p.classList.add('selected'); selDiff = d.id; } 
+                else if (!gameState.difficulty && d.id === 'any') { p.classList.add('selected'); }
                 rdiff.appendChild(p);
             });
-            
             document.getElementById('rematch-btn').onclick = () => {
                 playSound(sfx.click);
                 const activeGenreBtn = document.querySelector('#rematch-genre .genre-option.selected');
                 const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
                 socket.emit('play-again', gameState.roomId, finalGenre, selDiff);
             };
-
             document.getElementById('back-menu-btn').onclick = () => {
                 playSound(sfx.click);
+                localStorage.removeItem('duobrain_active_room');
                 setTimeout(() => window.location.reload(), 150);
             };
-
         } else {
             const waitingBox = document.createElement('div');
             waitingBox.className = 'rematch-box'; 
-            waitingBox.style.opacity = '0.8';
-            
             waitingBox.innerHTML = `
                 <h3 style="margin-bottom: 15px; color: var(--primary-color);">Host is setting up...</h3>
                 <div class="genre-selector" id="guest-rematch-genre" style="margin-bottom: 10px; pointer-events: none; opacity: 0.6;"></div>
@@ -709,22 +838,18 @@ socket.on('round-results', (answers, correctAns) => {
                 <button id="back-menu-btn-guest" class="secondary-btn" style="margin-top: 15px;">Leave to Main Menu</button>
             `;
             optsContainer.appendChild(waitingBox);
-            
             injectDailyGenres('guest-rematch-genre', true);
-            
             const rdiff = document.getElementById('guest-rematch-difficulty');
             [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
                 const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
-                
                 p.setAttribute('data-difficulty', d.id);
-                
                 if(d.id === gameState.difficulty) p.classList.add('selected');
                 else if (!gameState.difficulty && d.id === 'any') p.classList.add('selected');
                 rdiff.appendChild(p);
             });
-
             document.getElementById('back-menu-btn-guest').onclick = () => {
                 playSound(sfx.click);
+                localStorage.removeItem('duobrain_active_room');
                 setTimeout(() => window.location.reload(), 150);
             };
         }
@@ -739,13 +864,10 @@ function startCountdownSequence() {
     countText.textContent = count;
     countText.classList.add('countdown-pulse');
     playSound(sfx.tick);
-    
     countdownTimer = setInterval(() => {
         count--;
-        if (count > 0) {
-            countText.textContent = count;
-            playSound(sfx.tick);
-        } else {
+        if (count > 0) { countText.textContent = count; playSound(sfx.tick); } 
+        else {
             clearInterval(countdownTimer);
             countText.classList.remove('countdown-pulse');
             switchScreen(screens.quiz);
@@ -758,10 +880,8 @@ function renderQuestion() {
     stopSound(sfx.tick); 
     optsContainer.classList.remove('jammed-state'); 
     optsContainer.classList.add('options-grid'); 
-    
     const currentQ = gameState.questions[gameState.currentQuestionIndex];
     document.getElementById('question-text').textContent = currentQ.q;
-    
     isPaused = false;
     let durationSec = (gameState.currentQuestionIndex === 5) ? 7 : 20;
     timeLeft = durationSec;
@@ -770,80 +890,45 @@ function renderQuestion() {
 
     if (gameState.currentQuestionIndex === 5) {
         document.getElementById('turn-indicator').innerHTML = `<span class="sudden-death-text">SUDDEN DEATH</span>`;
-        document.getElementById('bg-video').classList.add('sudden-death-bg');
+        updateBackground(true);
     } else if (gameState.currentQuestionIndex === 4) {
-        document.getElementById('turn-indicator').innerHTML = `<span style="color:#f59e0b; font-weight:900;">WAGER ROUND</span>`;
-        document.getElementById('bg-video').classList.remove('sudden-death-bg');
+        document.getElementById('turn-indicator').innerHTML = `<span style="color:#f59e0b; font-weight:900;">CLUTCH ROUND</span>`;
+        updateBackground(false);
     } else {
         document.getElementById('turn-indicator').textContent = `Round ${gameState.currentQuestionIndex + 1}`;
-        document.getElementById('bg-video').classList.remove('sudden-death-bg');
+        updateBackground(false);
     }
     
     optsContainer.innerHTML = '';
     timerDisplay.classList.remove('hidden-element');
     timerDisplay.textContent = `${timeLeft}s`;
     clearInterval(questionTimer);
-
     questionTimer = setInterval(() => {
         if (isPaused) return;
-
         const remainingMs = expectedEndTime - Date.now();
         timeLeft = Math.ceil(remainingMs / 1000);
-
         if (timeLeft <= 0) {
-            timeLeft = 0;
-            timerDisplay.textContent = `0s`;
-            clearInterval(questionTimer);
-            stopSound(sfx.tick); 
-            
+            timeLeft = 0; timerDisplay.textContent = `0s`; clearInterval(questionTimer); stopSound(sfx.tick); 
             isWaitingForOpponent = true;
-
-            if(socket) socket.emit('submit-answer', gameState.roomId, -1, 0);
-            
-            optsContainer.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; border: 2px dashed #ef4444;">
-                    <h3 style="color: #ef4444; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #ef4444;">Time's Up!</h3>
-                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
-                </div>
-            `;
+            if(socket) socket.emit('submit-answer', gameState.roomId, -1, 0, myPersistentId);
+            optsContainer.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; border: 2px dashed #ef4444;"><h3 style="color: #ef4444; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #ef4444;">Time's Up!</h3><p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p></div>`;
             return;
         }
-
         timerDisplay.textContent = `${timeLeft}s`;
-        
         if (timeLeft <= 5 && timeLeft > 0) {
             timerDisplay.classList.add('timer-warning'); 
-            
-            if (tickSoundPlayedForSecond !== timeLeft) {
-                playSound(sfx.tick);
-                tickSoundPlayedForSecond = timeLeft;
-            }
-        } else {
-            timerDisplay.classList.remove('timer-warning');
-        }
-
+            if (tickSoundPlayedForSecond !== timeLeft) { playSound(sfx.tick); tickSoundPlayedForSecond = timeLeft; }
+        } else { timerDisplay.classList.remove('timer-warning'); }
     }, 100);
 
     currentQ.options.forEach((opt, i) => {
         const btn = document.createElement('button');
         btn.className = 'option-btn'; btn.textContent = opt;
-        
-        btn.setAttribute('aria-label', `Select ${opt}`);
         btn.onclick = () => {
-            playSound(sfx.click); 
-            clearInterval(questionTimer);
-            stopSound(sfx.tick); 
-            
+            playSound(sfx.click); clearInterval(questionTimer); stopSound(sfx.tick); 
             isWaitingForOpponent = true;
-
-            if(socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft);
-            
-            optsContainer.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(56, 189, 248, 0.1); border-radius: 16px; border: 2px dashed #38bdf8;">
-                    <h3 style="color: #38bdf8; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #38bdf8;">Answer Locked</h3>
-                    <p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p>
-                </div>
-            `;
+            if(socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft, myPersistentId);
+            optsContainer.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(56, 189, 248, 0.1); border-radius: 16px; border: 2px dashed #38bdf8;"><h3 style="color: #38bdf8; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #38bdf8;">Answer Locked</h3><p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p></div>`;
         };
         optsContainer.appendChild(btn);
     });
@@ -852,80 +937,52 @@ function renderQuestion() {
 socket.on('load-next-question', () => { switchScreen(screens.quiz); gameState.currentQuestionIndex++; renderQuestion(); });
 
 socket.on('restart-game', (g, sanitizedQuestions) => { 
-    clearInterval(pauseTimerInterval); 
-    resetPowerUps();
-    isMatchFinished = false; // Reset the flag for rematches
-    isWaitingForOpponent = false;
+    clearInterval(pauseTimerInterval); resetPowerUps(); isMatchFinished = false; isWaitingForOpponent = false;
     document.getElementById('help-btn').style.display = 'none';
     document.querySelector('.chat-container').classList.remove('expanded-chat'); 
-    document.getElementById('bg-video').classList.remove('sudden-death-bg');
+    updateBackground(false);
     gameState.genre = g; gameState.questions = sanitizedQuestions;
     gameState.currentQuestionIndex = 0; gameState.myScore = 0; gameState.enemyScore = 0; 
     gameState.myWager = null; gameState.enemyWager = null;
-    
     startCountdownSequence();
 });
 
 socket.on('enemy-powerup', (type, enemyName) => {
     if(type === '5050') showToast(`<strong>${enemyName}</strong> used Decrypt!`);
-    
     if(type === 'freeze') {
         showToast(`<strong>${enemyName}</strong> overclocked their timer!`);
-        timerDisplay.classList.remove('ice-flash');
-        void timerDisplay.offsetWidth; 
-        timerDisplay.classList.add('ice-flash');
+        timerDisplay.classList.remove('ice-flash'); void timerDisplay.offsetWidth; timerDisplay.classList.add('ice-flash');
     }
-    
     if(type === 'jammer') {
         showToast(`<strong>${enemyName}</strong> glitched your screen!`);
         optsContainer.classList.add('jammed-state');
-        
         const vig = document.getElementById('jammer-vignette');
         vig.classList.add('vignette-active');
-        
-        setTimeout(() => { 
-            optsContainer.classList.remove('jammed-state'); 
-            vig.classList.remove('vignette-active');
-        }, 5000); 
+        setTimeout(() => { optsContainer.classList.remove('jammed-state'); vig.classList.remove('vignette-active'); }, 5000); 
     }
 });
 
 socket.on('receive-chat', d => { playSound(sfx.notif); addMsg(d.name, d.text, false); });
 
-// --- INITIALIZATION ON LOAD ---
+// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    
     const ua = navigator.userAgent || navigator.vendor || window.opera;
     const isInAppBrowser = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Instagram") > -1) || (ua.indexOf("TikTok") > -1);
-    
     if (isInAppBrowser) {
         document.getElementById('inapp-warning').classList.remove('hidden-element');
         document.querySelector('.app-container').style.display = 'none';
-        
         const overlay = document.getElementById('entry-overlay');
         if(overlay) overlay.style.display = 'none';
-
         return; 
     }
-
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) document.getElementById('room-input').value = roomParam;
     
+    initProfile();
     setHourlyFunFact();
-    
     initProTips(); 
-    
     injectDailyGenres('lobby-genre');
-
-    document.querySelectorAll('.avatar-option').forEach(el => {
-        el.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                el.click();
-            }
-        });
-    });
 });
 
 const screens = { 
@@ -943,24 +1000,10 @@ function switchScreen(screenToActivate) {
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
 }
 
-// --- RULES MODAL LOGIC ---
 const rulesModal = document.getElementById('rules-modal');
-document.getElementById('help-btn').onclick = () => {
-    playSound(sfx.click);
-    rulesModal.classList.remove('hidden-element');
-};
-document.getElementById('close-rules-btn').onclick = () => {
-    playSound(sfx.click);
-    rulesModal.classList.add('hidden-element');
-};
-rulesModal.onclick = (e) => {
-    if (e.target === rulesModal) {
-        playSound(sfx.click);
-        rulesModal.classList.add('hidden-element');
-    }
-};
+document.getElementById('help-btn').onclick = () => { playSound(sfx.click); rulesModal.classList.remove('hidden-element'); };
+document.getElementById('close-rules-btn').onclick = () => { playSound(sfx.click); rulesModal.classList.add('hidden-element'); };
 
-// --- POWER-UPS LOGIC ---
 function resetPowerUps() {
     powerUps = { fifty: false, freeze: false, jammer: false };
     document.querySelectorAll('.pu-btn').forEach(btn => btn.classList.remove('used'));
@@ -971,16 +1014,12 @@ document.getElementById('pu-5050').onclick = function() {
     if (powerUps.fifty || gameState.currentQuestionIndex >= 6) return;
     powerUps.fifty = true; this.classList.add('used'); playSound(sfx.click);
     showToast("You activated Decrypt!");
-    
     if(socket) socket.emit('trigger-powerup', gameState.roomId, '5050', gameState.myName);
-
     const q = gameState.questions[gameState.currentQuestionIndex];
     const buttons = document.querySelectorAll('.option-btn');
-    
     q.removableIndices.forEach(idx => {
         if (idx !== undefined && buttons[idx] && !buttons[idx].disabled) {
-            buttons[idx].style.opacity = '0.2';
-            buttons[idx].disabled = true;
+            buttons[idx].style.opacity = '0.2'; buttons[idx].disabled = true;
         }
     });
 };
@@ -988,12 +1027,9 @@ document.getElementById('pu-5050').onclick = function() {
 document.getElementById('pu-freeze').onclick = function() {
     if (powerUps.freeze || gameState.currentQuestionIndex >= 6) return;
     powerUps.freeze = true; this.classList.add('used'); playSound(sfx.click);
-    
     showToast("You activated Overclock!");
     if(socket) socket.emit('trigger-powerup', gameState.roomId, 'freeze', gameState.myName);
-    
     expectedEndTime += 8000; 
-    
     timerDisplay.textContent = `${Math.ceil((expectedEndTime - Date.now())/1000)}s`;
     timerDisplay.classList.add('frozen-text');
 };
@@ -1011,30 +1047,13 @@ document.querySelectorAll('.wager-btn').forEach(btn => {
         playSound(sfx.click);
         const amount = parseInt(e.target.getAttribute('data-wager'));
         gameState.myWager = amount;
-        
         document.querySelectorAll('.wager-btn').forEach(b => {
-            b.disabled = true;
-            if(b !== e.target) b.style.opacity = '0.3';
+            b.disabled = true; if(b !== e.target) b.style.opacity = '0.3';
         });
-        
-        clearInterval(window.wagerInterval);
-        
         const waitText = document.getElementById('wager-wait-text');
-        waitText.textContent = "Waiting for opponent to wager...";
+        waitText.textContent = "Waiting for opponent to lock in...";
         waitText.classList.remove('hidden-element');
-        
-        if(socket) socket.emit('submit-wager', gameState.roomId, amount);
-    };
-});
-
-// --- MENU HANDLERS ---
-document.querySelectorAll('.avatar-option').forEach(option => {
-    option.onclick = (e) => {
-        playSound(sfx.click);
-        const parent = e.target.closest('.avatar-selector');
-        parent.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
-        e.target.classList.add('selected');
-        mySelectedAvatar = e.target.getAttribute('data-avatar');
+        if(socket) socket.emit('submit-wager', gameState.roomId, amount, myPersistentId);
     };
 });
 
@@ -1051,10 +1070,13 @@ document.querySelectorAll('#lobby-difficulty .genre-option').forEach(option => {
 
 document.getElementById('create-btn').onclick = () => {
     playSound(sfx.click);
-    const n = document.getElementById('host-name').value || "Host";
-    gameState.myName = n;
+    const btn = document.getElementById('create-btn');
+    btn.textContent = "Creating..."; btn.disabled = true; btn.style.opacity = '0.7';
+    if(socket) socket.emit('create-room', mySelectedAvatar, gameState.myName, mySelectedGenre, mySelectedDifficulty, myPersistentId);
     
-    if(socket) socket.emit('create-room', mySelectedAvatar, n, mySelectedGenre, mySelectedDifficulty, myPersistentId);
+    setTimeout(() => {
+        btn.textContent = "Create Room"; btn.disabled = false; btn.style.opacity = '1';
+    }, 2000);
 };
 
 document.getElementById('copy-link-btn').onclick = () => {
@@ -1069,66 +1091,43 @@ document.getElementById('copy-link-btn').onclick = () => {
 
 document.getElementById('join-btn').onclick = () => {
     playSound(sfx.click);
-    const n = document.getElementById('guest-name').value || "Guest";
     const c = document.getElementById('room-input').value;
     if(!c) return;
-    gameState.myName = n;
-    if(socket) socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, n, myPersistentId);
+    if(socket) socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, gameState.myName, myPersistentId);
 };
 
 document.getElementById('start-game-btn').onclick = () => {
     playSound(sfx.click);
     const btn = document.getElementById('start-game-btn');
-    btn.textContent = "Loading...";
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
+    btn.textContent = "Loading..."; btn.disabled = true; btn.style.opacity = '0.7';
     if(socket) socket.emit('start-game', gameState.roomId);
 };
 
-// --- CHAT SYSTEM ---
-const chatIn = document.getElementById('chat-input');
-const chatMsgs = document.getElementById('chat-messages');
-
+// --- EMOJI PICKER (IN-GAME CHAT ONLY) ---
 const emojiBtn = document.getElementById('emoji-btn');
 const emojiPicker = document.getElementById('emoji-picker');
+const chatIn = document.getElementById('chat-input');
 const emojiList = ['😀','😂','🤣','😊','😍','😭','🥺','😎','🔥','👍','❤️','✨','💀','💯','🤔','🙌','👀','🤯','🎉','💪'];
 
-emojiList.forEach(emoji => {
-    const span = document.createElement('span');
-    span.className = 'emoji-item';
-    span.textContent = emoji;
-    span.setAttribute('role', 'button');
-    span.setAttribute('tabindex', '0');
-    span.setAttribute('aria-label', emoji);
-    
-    span.onkeydown = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            span.click();
-        }
-    };
-    span.onclick = () => {
-        chatIn.value += emoji;
-        chatIn.focus();
-    };
-    emojiPicker.appendChild(span);
-});
+if (emojiBtn && emojiPicker) {
+    emojiList.forEach(emoji => {
+        const span = document.createElement('span');
+        span.className = 'emoji-item'; span.textContent = emoji;
+        span.setAttribute('role', 'button'); span.setAttribute('tabindex', '0');
+        span.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); span.click(); } };
+        span.onclick = () => { chatIn.value += emoji; chatIn.focus(); };
+        emojiPicker.appendChild(span);
+    });
 
-emojiBtn.onclick = (e) => {
-    e.stopPropagation();
-    emojiPicker.classList.toggle('hidden-element');
-};
+    emojiBtn.onclick = (e) => { e.stopPropagation(); emojiPicker.classList.toggle('hidden-element'); };
+    document.addEventListener('click', (e) => { if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add('hidden-element'); });
+}
 
-document.addEventListener('click', (e) => {
-    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
-        emojiPicker.classList.add('hidden-element');
-    }
-});
-
+// --- CHAT SYSTEM ---
 function addMsg(n, t, me) {
+    const chatMsgs = document.getElementById('chat-messages');
     const d = document.createElement('div'); d.className = `chat-bubble ${me ? 'me' : 'them'}`;
-    d.innerHTML = `<strong>${n}:</strong> `;
-    d.appendChild(document.createTextNode(t));
+    d.innerHTML = `<strong>${n}:</strong> `; d.appendChild(document.createTextNode(t));
     chatMsgs.appendChild(d); chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
@@ -1138,4 +1137,4 @@ document.getElementById('send-chat-btn').onclick = () => {
     if(socket) socket.emit('send-chat', gameState.roomId, { name: gameState.myName, text: t });
     addMsg("You", t, true); chatIn.value = "";
 };
-chatIn.onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
+document.getElementById('chat-input').onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };

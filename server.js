@@ -7,16 +7,20 @@ const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Use a fast 10-second ping to detect connection drops immediately
+const io = new Server(server, {
+    pingInterval: 10000, 
+    pingTimeout: 5000    
+});
 
 app.use(express.static('public'));
 
-// Connect to MongoDB using an Environment Variable for security
+// Connect to MongoDB with a 5-second timeout to prevent infinite hanging
 const MONGO_URI = process.env.MONGO_URI;
-
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => console.log("Connected to DuoBrain MongoDB!"))
-    .catch(err => console.error("MongoDB Connection Error:", err));
+    .catch(err => console.error("MongoDB Connection Error. Is your IP whitelisted on Atlas?:", err));
 
 const QuestionSchema = new mongoose.Schema({
     category: Number,
@@ -42,61 +46,39 @@ const categoryMap = {
     general: 9, vehicles: 28, politics: 24, celebs: 26, theatre: 13, cartoons: 32
 };
 
-function getFallbackQuestions() {
-    return [
-        { q: "Server Offline! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1, removableIndices: [0, 2] },
-        { q: "Fallback Mode: Which programming language uses 'console.log'?", options: ["Python", "Java", "JavaScript", "C++"], answer: 2, removableIndices: [0, 1] },
-        { q: "Fallback Mode: What is the capital of Japan?", options: ["Seoul", "Beijing", "Tokyo", "Bangkok"], answer: 2, removableIndices: [0, 3] },
-        { q: "Fallback Mode: Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Rembrandt"], answer: 1, removableIndices: [2, 3] },
-        { q: "Fallback Mode: What is the chemical symbol for Gold?", options: ["Ag", "Au", "Fe", "Pb"], answer: 1, removableIndices: [0, 3] },
-        { q: "Fallback Mode (Sudden Death): How many bits are in a byte?", options: ["4", "8", "16", "32"], answer: 1, removableIndices: [0, 3] }
-    ];
-}
-
-// We no longer need getFallbackQuestions() at all!
-
 async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     const categoryId = categoryMap[genre] || 9; 
-    
     let matchFilter = { category: categoryId };
     if (difficulty !== 'any') {
         matchFilter.difficulty = difficulty;
     }
 
     try {
-        // Attempt 1: Grab 6 random questions matching category AND difficulty
         let rawQuestions = await Question.aggregate([
             { $match: matchFilter },
             { $sample: { size: 6 } }
         ]);
 
-        // Attempt 2: Drop difficulty requirement
         if ((!rawQuestions || rawQuestions.length < 6) && difficulty !== 'any') {
-            console.log(`Not enough ${difficulty} questions for category ${categoryId}. Dropping difficulty to ANY.`);
             rawQuestions = await Question.aggregate([
                 { $match: { category: categoryId } },
                 { $sample: { size: 6 } }
             ]);
         }
 
-        // Attempt 3: Category is completely empty. Secretly pull from General Knowledge (Category 9).
         if (!rawQuestions || rawQuestions.length < 6) {
-            console.log(`Category ${categoryId} is empty. Pulling real trivia from General Knowledge.`);
             rawQuestions = await Question.aggregate([
                 { $match: { category: 9 } },
                 { $sample: { size: 6 } }
             ]);
         }
 
-        // Attempt 4: Total fail-safe. Just grab 6 random questions from anywhere in the entire database.
         if (!rawQuestions || rawQuestions.length < 6) {
-            console.log(`Extreme Fallback: Pulling 6 random questions from the entire database.`);
             rawQuestions = await Question.aggregate([
                 { $sample: { size: 6 } }
             ]);
         }
 
-        // Format the 6 successful real trivia questions for the game
         return rawQuestions.map(item => {
             const question = he.decode(item.question);
             const correctAnswer = he.decode(item.correct_answer);
@@ -119,7 +101,7 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
         });
     } catch (err) {
         console.error("Database query failed:", err);
-        return []; // The game will freeze, but it will never show fake questions
+        throw err; 
     }
 }
 
@@ -173,24 +155,37 @@ io.on('connection', (socket) => {
     socket.on('start-game', async (roomId) => {
         const room = rooms[roomId];
         if (room && room.players.length === 2 && room.status === 'lobby') {
-            room.status = 'playing';
-            room.questions = await fetchQuestionsFromDB(room.genre, room.difficulty);
+            room.status = 'fetching'; 
             
-            const sanitizedQuestions = room.questions.map(q => ({ 
-                q: q.q, options: q.options, removableIndices: q.removableIndices 
-            }));
-            
-            io.to(roomId).emit('game-start', room.players, room.genre, roomId, sanitizedQuestions);
+            try {
+                room.questions = await fetchQuestionsFromDB(room.genre, room.difficulty);
+                
+                if (!room.questions || room.questions.length < 6) {
+                    throw new Error("Not enough questions loaded from the database.");
+                }
+
+                const sanitizedQuestions = room.questions.map(q => ({ 
+                    q: q.q, options: q.options, removableIndices: q.removableIndices 
+                }));
+                
+                room.status = 'playing';
+                io.to(roomId).emit('game-start', room.players, room.genre, roomId, sanitizedQuestions);
+            } catch (error) {
+                console.error("Game Start Error:", error);
+                room.status = 'lobby'; 
+                socket.emit('game-start-error', "Database connection failed. Please check your internet or DB server.");
+            }
         }
     });
 
     socket.on('send-chat', (roomId, data) => socket.to(roomId).emit('receive-chat', data));
 
-    socket.on('submit-answer', (roomId, answerIndex, timeRemaining) => {
+    // SENIOR DEV FIX: Map answers to persistent playerId, not volatile socket.id
+    socket.on('submit-answer', (roomId, answerIndex, timeRemaining, playerId) => {
         const room = rooms[roomId];
         if (!room) return;
         
-        room.answers[socket.id] = { index: answerIndex, time: timeRemaining };
+        room.answers[playerId] = { index: answerIndex, time: timeRemaining };
 
         if (Object.keys(room.answers).length === 2) {
             const correctAns = room.questions[room.currentQuestionIndex].answer;
@@ -213,10 +208,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('submit-wager', (roomId, amount) => {
+    // SENIOR DEV FIX: Map wagers to persistent playerId
+    socket.on('submit-wager', (roomId, amount, playerId) => {
         const room = rooms[roomId];
         if (!room) return;
-        room.wagers[socket.id] = amount;
+        room.wagers[playerId] = amount;
         
         if (Object.keys(room.wagers).length === 2) {
             io.to(roomId).emit('wager-phase-complete', room.wagers);
@@ -235,23 +231,35 @@ io.on('connection', (socket) => {
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
         const room = rooms[roomId];
         if (room) {
-            room.genre = newGenre; 
-            room.difficulty = newDifficulty;
-            room.answers = {};
-            room.wagers = {}; 
-            room.currentQuestionIndex = 0; 
-            room.status = 'playing'; 
-            room.questions = await fetchQuestionsFromDB(newGenre, newDifficulty);
-            
-            const sanitizedQuestions = room.questions.map(q => ({ 
-                q: q.q, options: q.options, removableIndices: q.removableIndices 
-            }));
-            
-            io.to(roomId).emit('restart-game', newGenre, sanitizedQuestions);
+            room.status = 'fetching';
+            try {
+                room.genre = newGenre; 
+                room.difficulty = newDifficulty;
+                room.answers = {};
+                room.wagers = {}; 
+                room.currentQuestionIndex = 0; 
+                room.questions = await fetchQuestionsFromDB(newGenre, newDifficulty);
+                
+                const sanitizedQuestions = room.questions.map(q => ({ 
+                    q: q.q, options: q.options, removableIndices: q.removableIndices 
+                }));
+                
+                room.status = 'playing';
+                io.to(roomId).emit('restart-game', newGenre, sanitizedQuestions);
+            } catch (error) {
+                console.error("Rematch Error:", error);
+                room.status = 'finished';
+                socket.emit('game-start-error', "Failed to load rematch questions.");
+            }
         }
     });
 
     socket.on('trigger-powerup', (roomId, type, playerName) => socket.to(roomId).emit('enemy-powerup', type, playerName));
+
+    // SENIOR DEV FIX: P2P State Recovery Router
+    socket.on('sync-state', (targetId, syncData) => {
+        io.to(targetId).emit('recover-game', syncData);
+    });
 
     socket.on('reconnect-player', (roomId, playerId) => {
         if (rooms[roomId]) {
@@ -262,10 +270,17 @@ io.on('connection', (socket) => {
                 player.connected = true;
                 socketToRoom[socket.id] = roomId;
                 socket.join(roomId);
+                
                 if (room.players.every(p => p.connected)) {
                     clearTimeout(room.disconnectTimer);
                     room.disconnectTimer = null;
                     io.to(roomId).emit('resume-game');
+                    
+                    // Ask the surviving player to beam their UI state to the reconnecting player
+                    const otherPlayer = room.players.find(p => p.id !== socket.id);
+                    if (otherPlayer) {
+                        io.to(otherPlayer.id).emit('request-state-sync', socket.id);
+                    }
                 }
             }
         }
@@ -286,12 +301,13 @@ io.on('connection', (socket) => {
             } else if (room.players.length === 2 && room.status === 'playing') {
                 io.to(roomId).emit('pause-game', player ? player.name : 'Opponent');
 
+                // 30-second Grace Period for player to reconnect
                 room.disconnectTimer = setTimeout(() => {
                     io.to(roomId).emit('default-win');
                     room.players.forEach(p => { if (p.connected) delete socketToRoom[p.id]; });
                     delete rooms[roomId];
                     updateGlobalStats(); 
-                }, 10000); 
+                }, 30000); 
             } else {
                 socket.to(roomId).emit('opponent-disconnected');
                 delete rooms[roomId];

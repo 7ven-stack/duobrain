@@ -20,9 +20,7 @@
     <div id="freeze-overlay" class="freeze-overlay"></div>
     <div id="toast-container" class="toast-container"></div>
 
-    <video autoplay muted loop id="bg-video">
-        <source src="calm-space-constellations-moewalls-com.mp4" type="video/mp4">
-    </video>
+    <img id="bg-image" src="neon-retrowave-art-3840x2160-16098.jpg" alt="Neon Retrowave Background">
 
     <div id="entry-overlay" class="modal active-screen" style="z-index: 999999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: flex;">
         <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 50px;">
@@ -31,10 +29,29 @@
         </div>
     </div>
 
+    <div id="profile-setup-overlay" class="modal hidden-element" style="z-index: 999998; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
+        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 40px; width: 90%; max-width: 400px;">
+            <h2 style="font-size: 2rem; color: white; margin-bottom: 5px;">Welcome to DuoBrain</h2>
+            <p style="color: var(--text-muted); margin-bottom: 25px; font-size: 0.9rem;">Create your profile to start playing</p>
+
+            <input type="text" id="setup-name" placeholder="Enter your name" maxlength="15" autocomplete="off" style="width: 100%; margin-bottom: 20px; text-align: center; font-size: 1.2rem; padding: 15px;">
+
+            <p style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Choose your Avatar</p>
+            <div class="avatar-selector" id="setup-avatar-selector" style="margin-bottom: 30px;">
+                <div class="avatar-option selected" data-avatar="🦊" role="button" tabindex="0">🦊</div>
+                <div class="avatar-option" data-avatar="🐼" role="button" tabindex="0">🐼</div>
+                <div class="avatar-option" data-avatar="🐯" role="button" tabindex="0">🐯</div>
+                <div class="avatar-option" data-avatar="🐸" role="button" tabindex="0">🐸</div>
+            </div>
+
+            <button id="save-profile-btn" class="primary-btn" style="width: 100%;">Continue</button>
+        </div>
+    </div>
+
     <div id="pause-overlay" class="modal hidden-element" style="z-index: 99999; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);">
         <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 2px solid #f59e0b; padding: 50px;">
             <h2 style="font-size: 3rem; color: #f59e0b; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.6);">Game Paused</h2>
-            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 600; animation: pulse 1.5s infinite;">Opponent disconnected. Waiting 10s...</p>
+            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 600; animation: pulse 1.5s infinite;">Opponent disconnected. Waiting 30s...</p>
         </div>
     </div>
 
@@ -61,8 +78,8 @@
                 <h3>The Basics</h3>
                 <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. Answer correctly to earn a point!</p>
                 
-                <h3>Wager Phase Round</h3>
-                <p>Before Round 5 begins, you will see the category and must bet <strong>1, 2, or 3 points</strong>. Answer correctly to win those points, but guess wrong and you lose them! This is your chance for a massive comeback.</p>
+                <h3>The Clutch Round</h3>
+                <p>Before Round 5 begins, you will see the category and must risk <strong>1, 2, or 3 points</strong>. Answer correctly to win those points, but guess wrong and you lose them! This is your chance for a massive clutch comeback.</p>
 
                 <h3>Sudden Death Round</h3>
                 <p>The final round is Sudden Death! The pressure is doubled with only 7 seconds on the clock. If both players answer correctly, the player who answered <strong>fastest</strong> steals the point.</p>
@@ -83,21 +100,16 @@
         <section id="menu-screen" class="card active-screen">
             <button id="help-btn" class="help-btn" title="How to Play" aria-label="Open How to Play">?</button>
             
+            <div id="menu-profile-display" style="position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px; display: flex; align-items: center; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;" title="Click to edit profile">
+                <span style="font-size:1.2rem; margin-right:8px;">🦊</span> <strong style="color:white;">Player</strong>
+            </div>
+
             <h1>DuoBrain <span class="badge">LIVE</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
             
             <div class="split-layout">
                 <div class="panel">
                     <h3>Host a Game</h3>
-                    <input type="text" id="host-name" placeholder="Your Name" aria-label="Your Name">
-                    
-                    <div class="avatar-selector">
-                        <div class="avatar-option selected" data-avatar="🦊" aria-label="Fox Avatar" role="button" tabindex="0">🦊</div>
-                        <div class="avatar-option" data-avatar="🐼" aria-label="Panda Avatar" role="button" tabindex="0">🐼</div>
-                        <div class="avatar-option" data-avatar="🐯" aria-label="Tiger Avatar" role="button" tabindex="0">🐯</div>
-                        <div class="avatar-option" data-avatar="🐸" aria-label="Frog Avatar" role="button" tabindex="0">🐸</div>
-                    </div>
-                    
                     <div style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 11px 10px; margin-bottom: 20px;">
                         <div style="text-align: center;">
                             <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Online Players</p>
@@ -124,16 +136,7 @@
                 
                 <div class="panel">
                     <h3>Join a Game</h3>
-                    <input type="text" id="guest-name" placeholder="Your Name" aria-label="Your Name">
-                    
-                    <div class="avatar-selector">
-                        <div class="avatar-option selected" data-avatar="🦊" aria-label="Fox Avatar" role="button" tabindex="0">🦊</div>
-                        <div class="avatar-option" data-avatar="🐼" aria-label="Panda Avatar" role="button" tabindex="0">🐼</div>
-                        <div class="avatar-option" data-avatar="🐯" aria-label="Tiger Avatar" role="button" tabindex="0">🐯</div>
-                        <div class="avatar-option" data-avatar="🐸" aria-label="Frog Avatar" role="button" tabindex="0">🐸</div>
-                    </div>
-                    
-                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4" aria-label="Room Code">
+                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4" aria-label="Room Code" style="margin-top: 10px;">
                     <button id="join-btn" class="secondary-btn" aria-label="Join Room">Join Room</button>
 
                     <div class="quick-rules">
@@ -184,14 +187,16 @@
 
         <section id="wager-screen" class="card hidden-screen" style="text-align: center; justify-content: center; min-height: 400px;">
             <p style="font-size: 1.2rem; color: var(--text-muted); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">Round 5</p>
-            <h2 style="font-size: 3.5rem; color: #f59e0b; text-shadow: 0 0 30px rgba(245, 158, 11, 0.6); margin: 0 0 10px;">WAGER ROUND</h2>
+            <h2 style="font-size: 3.5rem; color: #f59e0b; text-shadow: 0 0 30px rgba(245, 158, 11, 0.6); margin: 0 0 10px;">CLUTCH ROUND</h2>
             <p style="font-size: 1.1rem; margin-bottom: 30px; color: var(--text-main);">Category: <span id="wager-category" style="color: var(--primary-color); font-weight: bold; text-transform: uppercase;">SCIENCE</span></p>
             
-            <p style="margin-bottom: 15px; font-weight: 600; color: var(--text-muted);">Choose your risk (+/- points):</p>
-            <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
-                <button class="secondary-btn wager-btn" data-wager="1" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">1</button>
-                <button class="secondary-btn wager-btn" data-wager="2" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">2</button>
-                <button class="secondary-btn wager-btn" data-wager="3" style="flex: 1; font-size: 1.8rem; padding: 15px 0;">3</button>
+            <div id="wager-controls" style="transition: opacity 0.3s; opacity: 0.3; pointer-events: none;">
+                <p style="margin-bottom: 15px; font-weight: 600; color: var(--text-muted);">Choose your risk (± points):</p>
+                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+                    <button class="secondary-btn wager-btn" data-wager="1" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±1 Point</button>
+                    <button class="secondary-btn wager-btn" data-wager="2" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±2 Points</button>
+                    <button class="secondary-btn wager-btn" data-wager="3" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±3 Points</button>
+                </div>
             </div>
             
             <p id="wager-wait-text" class="hidden-element" style="color: var(--primary-color); font-weight: 700; height: 20px;"></p>
