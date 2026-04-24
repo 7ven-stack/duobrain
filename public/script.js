@@ -439,31 +439,60 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
 socket.on('start-wager-phase', (genre) => {
     document.getElementById('wager-category').textContent = genre;
     
+    const controls = document.getElementById('wager-controls');
+    const waitText = document.getElementById('wager-wait-text');
+    
+    // Phase 0: Reset the UI and lock the buttons
+    if (controls) {
+        controls.style.opacity = '0.3';
+        controls.style.pointerEvents = 'none';
+    }
+    
     document.querySelectorAll('.wager-btn').forEach(b => {
         b.disabled = false;
         b.style.opacity = '1';
     });
     
-    const waitText = document.getElementById('wager-wait-text');
-    waitText.textContent = "Waiting for opponent...";
-    waitText.style.color = "var(--primary-color)";
-    waitText.classList.add('hidden-element');
-    
     gameState.myWager = null;
     switchScreen(screens.wager);
 
-    let wTime = 10;
-    waitText.textContent = `Choose quickly! (${wTime}s)`;
+    // Phase 1: The 3-Second "READ THE CATEGORY" Warning
+    let prepTime = 3;
+    waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
     waitText.classList.remove('hidden-element');
     
+    clearInterval(window.wagerInterval);
+    
     window.wagerInterval = setInterval(() => {
-        wTime--;
-        if (!gameState.myWager) waitText.textContent = `Choose quickly! (${wTime}s)`;
-        if (wTime <= 0) {
+        prepTime--;
+        if (prepTime > 0) {
+            waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
+            playSound(sfx.tick); // Tick down the warning
+        } else {
             clearInterval(window.wagerInterval);
-            if (!gameState.myWager) {
-                document.querySelector('.wager-btn[data-wager="1"]').click(); 
+            
+            // Phase 2: Unlock the buttons and start the 10-second betting clock
+            if (controls) {
+                controls.style.opacity = '1';
+                controls.style.pointerEvents = 'auto';
             }
+            
+            let wTime = 10;
+            waitText.innerHTML = `Choose quickly! (${wTime}s)`;
+            waitText.style.color = "var(--primary-color)";
+            playSound(sfx.notif); // Play a bright chime when betting opens
+            
+            window.wagerInterval = setInterval(() => {
+                wTime--;
+                if (!gameState.myWager) waitText.innerHTML = `Choose quickly! (${wTime}s)`;
+                if (wTime <= 0) {
+                    clearInterval(window.wagerInterval);
+                    if (!gameState.myWager) {
+                        // Auto-bet 1 point if they panic and run out of time
+                        document.querySelector('.wager-btn[data-wager="1"]').click(); 
+                    }
+                }
+            }, 1000);
         }
     }, 1000);
 });

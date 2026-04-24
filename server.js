@@ -53,6 +53,8 @@ function getFallbackQuestions() {
     ];
 }
 
+// We no longer need getFallbackQuestions() at all!
+
 async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     const categoryId = categoryMap[genre] || 9; 
     
@@ -62,24 +64,39 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     }
 
     try {
+        // Attempt 1: Grab 6 random questions matching category AND difficulty
         let rawQuestions = await Question.aggregate([
             { $match: matchFilter },
             { $sample: { size: 6 } }
         ]);
 
+        // Attempt 2: Drop difficulty requirement
         if ((!rawQuestions || rawQuestions.length < 6) && difficulty !== 'any') {
-            console.log(`Not enough ${difficulty} questions for category ${categoryId}. Smart Fallback to ANY difficulty.`);
+            console.log(`Not enough ${difficulty} questions for category ${categoryId}. Dropping difficulty to ANY.`);
             rawQuestions = await Question.aggregate([
                 { $match: { category: categoryId } },
                 { $sample: { size: 6 } }
             ]);
         }
 
+        // Attempt 3: Category is completely empty. Secretly pull from General Knowledge (Category 9).
         if (!rawQuestions || rawQuestions.length < 6) {
-            console.log(`Database empty for category ${categoryId}. Using fallbacks.`);
-            return getFallbackQuestions();
+            console.log(`Category ${categoryId} is empty. Pulling real trivia from General Knowledge.`);
+            rawQuestions = await Question.aggregate([
+                { $match: { category: 9 } },
+                { $sample: { size: 6 } }
+            ]);
         }
 
+        // Attempt 4: Total fail-safe. Just grab 6 random questions from anywhere in the entire database.
+        if (!rawQuestions || rawQuestions.length < 6) {
+            console.log(`Extreme Fallback: Pulling 6 random questions from the entire database.`);
+            rawQuestions = await Question.aggregate([
+                { $sample: { size: 6 } }
+            ]);
+        }
+
+        // Format the 6 successful real trivia questions for the game
         return rawQuestions.map(item => {
             const question = he.decode(item.question);
             const correctAnswer = he.decode(item.correct_answer);
@@ -102,7 +119,7 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
         });
     } catch (err) {
         console.error("Database query failed:", err);
-        return getFallbackQuestions();
+        return []; // The game will freeze, but it will never show fake questions
     }
 }
 
