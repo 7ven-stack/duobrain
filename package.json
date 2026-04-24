@@ -13,6 +13,8 @@
   "dependencies": {
     "express": "^5.2.1",
     "he": "^1.2.0",
+    "mongodb": "^6.21.0",
+    "mongoose": "^8.23.1",
     "socket.io": "^4.8.3"
   }
 }

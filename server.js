@@ -2,12 +2,29 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const he = require('he');
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
+
+// Connect to MongoDB using an Environment Variable for security
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://duobrain_user:<password>@duobraincluster.qfi09ao.mongodb.net/duobrain?retryWrites=true&w=majority&appName=DuoBrainCluster";
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ Connected to DuoBrain MongoDB!"))
+    .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+const QuestionSchema = new mongoose.Schema({
+    category: Number,
+    difficulty: String,
+    question: String,
+    correct_answer: String,
+    incorrect_answers: [String]
+});
+const Question = mongoose.model('Question', QuestionSchema);
 
 const rooms = {};
 const socketToRoom = {}; 
@@ -26,7 +43,7 @@ const categoryMap = {
 
 function getFallbackQuestions() {
     return [
-        { q: "API Rate Limit Hit! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1, removableIndices: [0, 2] },
+        { q: "Server Offline! Free Question: What is 2 + 2?", options: ["3", "4", "5", "6"], answer: 1, removableIndices: [0, 2] },
         { q: "Fallback Mode: Which programming language uses 'console.log'?", options: ["Python", "Java", "JavaScript", "C++"], answer: 2, removableIndices: [0, 1] },
         { q: "Fallback Mode: What is the capital of Japan?", options: ["Seoul", "Beijing", "Tokyo", "Bangkok"], answer: 2, removableIndices: [0, 3] },
         { q: "Fallback Mode: Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Rembrandt"], answer: 1, removableIndices: [2, 3] },
@@ -35,53 +52,32 @@ function getFallbackQuestions() {
     ];
 }
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function getSessionToken() {
-    try {
-        const res = await fetch('https://opentdb.com/api_token.php?command=request');
-        const data = await res.json();
-        if (data.response_code === 0) return data.token;
-    } catch (err) {
-        console.error("Failed to fetch token:", err);
-    }
-    return null;
-}
-
-async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, retries = 2) {
+// 🚀 NEW: Blazing fast Database Query
+async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     const categoryId = categoryMap[genre] || 9; 
-    const diffParam = difficulty !== 'any' ? `&difficulty=${difficulty}` : '';
-    const tokenParam = token ? `&token=${token}` : '';
-    const url = `https://opentdb.com/api.php?amount=6&category=${categoryId}${diffParam}&type=multiple${tokenParam}`;
+    
+    const matchFilter = { category: categoryId };
+    if (difficulty !== 'any') {
+        matchFilter.difficulty = difficulty;
+    }
 
     try {
-        const response = await fetch(url);
+        // Grab 6 random questions from your database
+        const rawQuestions = await Question.aggregate([
+            { $match: matchFilter },
+            { $sample: { size: 6 } }
+        ]);
 
-        if (response.status === 429 && retries > 0) {
-            await delay(3000);
-            return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
-        }
-
-        const data = await response.json();
-
-        if (data.response_code === 5 && retries > 0) {
-            await delay(3000);
-            return await fetchQuestionsFromAPI(genre, difficulty, token, retries - 1);
-        }
-
-        if (data.response_code === 4 && token) {
-            await fetch(`https://opentdb.com/api_token.php?command=reset&token=${token}`);
-            return await fetchQuestionsFromAPI(genre, difficulty, token, retries);
-        }
-
-        if (data.response_code === 1 || !data.results || data.response_code !== 0) {
+        if (!rawQuestions || rawQuestions.length === 0) {
+            console.log(`⚠️ No questions found in DB for category ${categoryId}. Using fallbacks.`);
             return getFallbackQuestions();
         }
 
-        return data.results.map(item => {
+        return rawQuestions.map(item => {
             const question = he.decode(item.question);
             const correctAnswer = he.decode(item.correct_answer);
             const incorrectAnswers = item.incorrect_answers.map(ans => he.decode(ans));
+            
             let options = [...incorrectAnswers, correctAnswer].sort(() => Math.random() - 0.5);
             const correctIdx = options.indexOf(correctAnswer);
             
@@ -98,6 +94,7 @@ async function fetchQuestionsFromAPI(genre, difficulty = 'any', token = null, re
             };
         });
     } catch (err) {
+        console.error("Database query failed:", err);
         return getFallbackQuestions();
     }
 }
@@ -109,23 +106,18 @@ function updateGlobalStats() {
 }
 
 io.on('connection', (socket) => {
-    
     updateGlobalStats();
 
     socket.on('create-room', async (avatar, playerName, genre, difficulty, playerId) => {
         const roomId = generateRoomCode();
-        
         rooms[roomId] = { 
-            players: [], genre: genre, difficulty: difficulty, 
-            answers: {}, questions: [], token: null,
+            players: [], genre: genre, difficulty: difficulty, answers: {}, questions: [], 
             currentQuestionIndex: 0, wagers: {}, status: 'lobby', disconnectTimer: null 
         };
-        
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'host', connected: true });
         socketToRoom[socket.id] = roomId; 
         socket.emit('room-created', roomId);
-        
         updateGlobalStats(); 
     });
 
@@ -158,8 +150,7 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         if (room && room.players.length === 2 && room.status === 'lobby') {
             room.status = 'playing';
-            room.token = await getSessionToken();
-            room.questions = await fetchQuestionsFromAPI(room.genre, room.difficulty, room.token);
+            room.questions = await fetchQuestionsFromDB(room.genre, room.difficulty);
             
             const sanitizedQuestions = room.questions.map(q => ({ 
                 q: q.q, options: q.options, removableIndices: q.removableIndices 
@@ -211,7 +202,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // FIX: Listen to the frontend and mark the room as safely finished!
     socket.on('match-finished', (roomId) => {
         if (rooms[roomId]) {
             rooms[roomId].status = 'finished';
@@ -227,7 +217,7 @@ io.on('connection', (socket) => {
             room.wagers = {}; 
             room.currentQuestionIndex = 0; 
             room.status = 'playing'; 
-            room.questions = await fetchQuestionsFromAPI(newGenre, newDifficulty, room.token);
+            room.questions = await fetchQuestionsFromDB(newGenre, newDifficulty);
             
             const sanitizedQuestions = room.questions.map(q => ({ 
                 q: q.q, options: q.options, removableIndices: q.removableIndices 
