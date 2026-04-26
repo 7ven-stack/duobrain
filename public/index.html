@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="icon-192.png">
 
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -24,8 +24,8 @@
 
     <div id="entry-overlay" class="modal active-screen" style="z-index: 999999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: flex;">
         <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 50px;">
-            <h1 style="font-size: 3.5rem; margin-bottom: 10px; color: white;">DuoBrain</h1>
-            <p style="color: var(--primary-color); font-size: 1.2rem; font-weight: 700; animation: pulse 1.5s infinite;">Connecting to servers...</p>
+            <h1 style="font-size: 3.5rem; margin-bottom: 10px; color: var(--primary-color); text-transform: uppercase;">DuoBrain</h1>
+            <p style="color: var(--secondary-color); font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase;">Connecting to servers...</p>
         </div>
     </div>
 
@@ -42,16 +42,18 @@
                 <div class="avatar-option" data-avatar="🐼" role="button" tabindex="0">🐼</div>
                 <div class="avatar-option" data-avatar="🐯" role="button" tabindex="0">🐯</div>
                 <div class="avatar-option" data-avatar="🐸" role="button" tabindex="0">🐸</div>
+                <div class="avatar-option" id="custom-avatar-btn" role="button" tabindex="0" title="Upload Photo" style="font-size: 2rem; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 200;">+</div>
             </div>
+            <input type="file" id="custom-avatar-input" accept="image/*" style="display: none;">
 
             <button id="save-profile-btn" class="primary-btn" style="width: 100%;">Continue</button>
         </div>
     </div>
 
     <div id="pause-overlay" class="modal hidden-element" style="z-index: 99999; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);">
-        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 2px solid #f59e0b; padding: 50px;">
-            <h2 style="font-size: 3rem; color: #f59e0b; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.6);">Game Paused</h2>
-            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 600; animation: pulse 1.5s infinite;">Opponent disconnected. Waiting 30s...</p>
+        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: none; border-left: 4px solid var(--primary-color); padding: 50px;">
+            <h2 style="font-size: 3rem; color: var(--primary-color); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">Game Paused</h2>
+            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase; background: #222; padding: 5px 15px;">Opponent disconnected. Waiting 30s...</p>
         </div>
     </div>
 
@@ -70,7 +72,7 @@
         </div>
     </div>
 
-   <div id="rules-modal" class="modal hidden-element">
+    <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
             <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">&times;</button>
             <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
@@ -99,26 +101,27 @@
         
         <section id="menu-screen" class="card active-screen">
             <button id="help-btn" class="help-btn" title="How to Play" aria-label="Open How to Play">?</button>
+            <button id="mute-btn" class="help-btn" title="Toggle Audio" aria-label="Toggle Audio">🔊</button>
             
-            <div id="menu-profile-display" style="position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px; display: flex; align-items: center; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;" title="Click to edit profile">
-                <span style="font-size:1.2rem; margin-right:8px;">🦊</span> <strong style="color:white;">Player</strong>
+            <div id="menu-profile-display" style="position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);" title="Click to edit profile">
+                <span class="cyber-avatar" style="font-size:1.2rem;">🦊</span>
             </div>
 
-            <h1>DuoBrain <span class="badge">LIVE</span></h1>
+            <h1 style="text-align: center; margin-bottom: 5px;"><span class="glitch-text" data-text="DUOBRAIN">DUOBRAIN</span> <span class="badge">LIVE</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
-            
+
             <div class="split-layout">
                 <div class="panel">
                     <h3>Host a Game</h3>
-                    <div style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 11px 10px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--secondary-color); padding: 11px 10px; margin-bottom: 20px; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
                         <div style="text-align: center;">
                             <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Online Players</p>
-                            <p id="stat-online" style="font-size: 1.1rem; color: #10b981; font-weight: 800; margin: 0;">1</p>
+                            <p id="stat-online" style="font-size: 1.1rem; color: var(--secondary-color); font-weight: 900; margin: 0;">1</p>
                         </div>
                         <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
                         <div style="text-align: center;">
                             <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Active Matches</p>
-                            <p id="stat-matches" style="font-size: 1.1rem; color: #38bdf8; font-weight: 800; margin: 0;">0</p>
+                            <p id="stat-matches" style="font-size: 1.1rem; color: var(--primary-color); font-weight: 900; margin: 0;">0</p>
                         </div>
                     </div>
 
@@ -151,13 +154,13 @@
         </section>
 
         <section id="lobby-screen" class="card hidden-screen" style="text-align: center;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px 20px; border: 1px solid var(--secondary-color); clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
                 <div style="text-align: left;">
                     <p style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Room Code</p>
-                    <h2 id="room-code-display" style="color: var(--primary-color); font-size: 2.5rem; letter-spacing: 5px; margin: 0; text-shadow: 0 0 20px rgba(99,102,241,0.5);">----</h2>
+                    <h2 id="room-code-display" style="color: var(--primary-color); font-size: 2.5rem; letter-spacing: 5px; margin: 0; text-transform: uppercase; font-weight: 900;">----</h2>
                 </div>
                 <div style="text-align: right;">
-                    <p id="lobby-status-text" style="color: #f59e0b; font-weight: 800; font-size: 0.9rem; animation: pulse 1.5s infinite;">Waiting for Player...</p>
+                    <p id="lobby-status-text" style="color: var(--primary-color); font-weight: 900; font-size: 0.9rem; animation: pulse 1.5s infinite; text-transform: uppercase;">Waiting for Player...</p>
                     <p id="lobby-players-text" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">1 / 2 Connected</p>
                 </div>
             </div>
@@ -182,12 +185,12 @@
 
         <section id="countdown-screen" class="card hidden-screen" style="text-align: center; justify-content: center;">
             <p style="font-size: 1.5rem; color: var(--text-muted); font-weight: 800; letter-spacing: 5px; text-transform: uppercase; margin-bottom: 10px;">Match Found</p>
-            <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); text-shadow: 0 0 40px rgba(99, 102, 241, 0.8); margin: 0;">3</h2>
+            <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); font-weight: 900; margin: 0;">3</h2>
         </section>
 
         <section id="wager-screen" class="card hidden-screen" style="text-align: center; justify-content: center; min-height: 400px;">
             <p style="font-size: 1.2rem; color: var(--text-muted); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">Round 5</p>
-            <h2 style="font-size: 3.5rem; color: #f59e0b; text-shadow: 0 0 30px rgba(245, 158, 11, 0.6); margin: 0 0 10px;">CLUTCH ROUND</h2>
+            <h2 style="font-size: 3.5rem; color: var(--primary-color); font-weight: 900; margin: 0 0 10px; text-transform: uppercase;">CLUTCH ROUND</h2>
             <p style="font-size: 1.1rem; margin-bottom: 30px; color: var(--text-main);">Category: <span id="wager-category" style="color: var(--primary-color); font-weight: bold; text-transform: uppercase;">SCIENCE</span></p>
             
             <div id="wager-controls" style="transition: opacity 0.3s; opacity: 0.3; pointer-events: none;">
@@ -231,6 +234,9 @@
                         <div id="turn-indicator" class="turn-badge">Syncing</div>
                     </div>
                 </header>
+                <div id="timer-bar-container" class="timer-bar-container hidden-element">
+                    <div id="timer-bar" class="timer-bar"></div>
+                </div>
             </div>
 
             <div class="powerups-panel" id="powerups-ui">

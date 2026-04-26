@@ -1,11 +1,15 @@
 let socket = null;
 const connectionStartTime = Date.now();
 
-// Persistent user ID logic
-let myPersistentId = localStorage.getItem('duobrain_user_id');
+const memoryStorage = {};
+function safeGetItem(key) { try { return localStorage.getItem(key) || memoryStorage[key]; } catch(e) { return memoryStorage[key]; } }
+function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) { memoryStorage[key] = val; } }
+function safeRemoveItem(key) { try { localStorage.removeItem(key); } catch(e) { delete memoryStorage[key]; } }
+
+let myPersistentId = safeGetItem('duobrain_user_id');
 if (!myPersistentId) {
     myPersistentId = Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('duobrain_user_id', myPersistentId);
+    safeSetItem('duobrain_user_id', myPersistentId);
 }
 
 const gameState = {
@@ -41,64 +45,191 @@ function updateBackground(isSuddenDeath) {
     }
 }
 
-// --- BULLETPROOF AUDIO ENGINE ---
-class MultiAudio {
-    constructor(src, poolSize, vol) {
-        this.pool = [];
-        this.idx = 0;
-        for (let i = 0; i < poolSize; i++) {
-            let a = new Audio(src);
-            a.volume = vol;
-            this.pool.push(a);
-        }
-    }
-    play() {
-        let a = this.pool[this.idx];
-        a.currentTime = 0;
-        let p = a.play();
-        if (p !== undefined) p.catch(e => console.warn("Audio blocked by browser"));
-        this.idx = (this.idx + 1) % this.pool.length;
-    }
-    stop() {
-        this.pool.forEach(a => {
-            a.pause();
-            a.currentTime = 0;
-        });
+// --- BULLETPROOF AUDIO ENGINE (WEB AUDIO API) ---
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+const masterGain = audioCtx.createGain();
+masterGain.connect(audioCtx.destination);
+masterGain.gain.value = 1;
+
+const audioBuffers = {};
+
+async function loadAudio(name, url) {
+    try {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        audioBuffers[name] = audioBuffer;
+    } catch (e) {
+        console.error(`Failed to load audio: ${name}`, e);
     }
 }
 
+// Pre-load all SFX into memory for 0ms latency
+loadAudio('click', 'click.mp3');
+loadAudio('tick', 'tick.mp3');
+loadAudio('notif', 'notif.mp3');
+loadAudio('win', 'win.mp3');
+loadAudio('lose', 'lose.mp3');
+loadAudio('bgm', 'bgm.mp3');
+
 const sfx = {
-    click: new MultiAudio('click.mp3', 5, 0.5),    
-    tick: new MultiAudio('tick.mp3', 2, 0.6),      
-    notif: new MultiAudio('notif.mp3', 3, 0.7),    
-    win: new MultiAudio('win.mp3', 1, 0.6),
-    lose: new MultiAudio('lose.mp3', 1, 0.5),
-    bgm: new Audio('bgm.mp3')                      
+    click: { name: 'click', vol: 0.5 },
+    tick: { name: 'tick', vol: 0.6 },
+    notif: { name: 'notif', vol: 0.7 },
+    win: { name: 'win', vol: 0.6 },
+    lose: { name: 'lose', vol: 0.5 },
+    bgm: { name: 'bgm', vol: 0.3 }
 };
 
-sfx.bgm.volume = 0.3; 
-sfx.bgm.loop = true; 
-
 function playSound(audioObj) {
-    if (!audioObj) return;
-    if (audioObj.play) audioObj.play();
+    if (!audioObj || !audioBuffers[audioObj.name]) return;
+    
+    // Prevent overlapping for tick to avoid phasing
+    if (audioObj.name === 'tick') {
+        stopSound(audioObj);
+    }
+    
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffers[audioObj.name];
+    
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = audioObj.vol;
+    
+    source.connect(gainNode);
+    gainNode.connect(masterGain);
+    
+    source.start(0);
+    
+    audioObj.activeSources = audioObj.activeSources || [];
+    audioObj.activeSources.push({ source, gainNode });
+    
+    source.onended = () => {
+        const i = audioObj.activeSources.findIndex(s => s.source === source);
+        if (i > -1) audioObj.activeSources.splice(i, 1);
+    };
+    
+    return source;
 }
 
 function stopSound(audioObj) {
-    if (!audioObj) return;
-    if (audioObj.stop) {
-        audioObj.stop(); 
-    } else if (audioObj.pause) {
-        audioObj.pause(); 
-        audioObj.currentTime = 0;
+    if (audioObj && audioObj.activeSources) {
+        audioObj.activeSources.forEach(s => {
+            try { 
+                // Smooth fade-out to prevent "popping" or "weird" zero-crossing artifacts
+                s.gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.015);
+                setTimeout(() => { try { s.source.stop(); } catch(e) {} }, 60);
+            } catch(e) {}
+        });
+        audioObj.activeSources = [];
     }
+}
+
+let isGlobalMuted = false;
+const muteBtn = document.getElementById('mute-btn');
+if (muteBtn) {
+    muteBtn.onclick = (e) => {
+        isGlobalMuted = !isGlobalMuted;
+        e.target.textContent = isGlobalMuted ? '🔇' : '🔊';
+        masterGain.gain.value = isGlobalMuted ? 0 : 1;
+    };
+}
+
+
+// --- PROCEDURAL AUDIO SYNTHESIZERS ---
+function playDecryptSound() {
+    if (isGlobalMuted || audioCtx.state === 'suspended') return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.connect(gain);
+        gain.connect(masterGain);
+        
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(1600, audioCtx.currentTime + 0.2);
+        
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+    } catch(e) { console.error('Decrypt SFX error:', e); }
+}
+
+function playOverclockSound() {
+    if (isGlobalMuted || audioCtx.state === 'suspended') return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.connect(gain);
+        gain.connect(masterGain);
+        
+        osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.6);
+        
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+    } catch(e) { console.error('Overclock SFX error:', e); }
+}
+
+function playGlitchSound() {
+    if (isGlobalMuted || audioCtx.state === 'suspended') return;
+    try {
+        const bufferSize = audioCtx.sampleRate * 0.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+            let white = Math.random() * 2 - 1;
+            data[i] = (lastOut + (0.02 * white)) / 1.02;
+            lastOut = data[i];
+            data[i] *= 3.5;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(masterGain);
+        
+        noise.start();
+    } catch(e) { console.error('Glitch SFX error:', e); }
 }
 
 let bgmStarted = false;
 function startBGM() {
-    if (!bgmStarted) {
-        const p = sfx.bgm.play();
-        if (p !== undefined) p.then(() => { bgmStarted = true; }).catch(e => console.warn("BGM wait"));
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    if (!bgmStarted && audioBuffers['bgm']) {
+        bgmStarted = true;
+        const bgmSource = audioCtx.createBufferSource();
+        bgmSource.buffer = audioBuffers['bgm'];
+        bgmSource.loop = true;
+        
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = sfx.bgm.vol;
+        
+        bgmSource.connect(gainNode);
+        gainNode.connect(masterGain);
+        bgmSource.start(0);
     }
 }
 window.addEventListener('click', startBGM);
@@ -123,8 +254,8 @@ const setupNameInput = document.getElementById('setup-name');
 const saveProfileBtn = document.getElementById('save-profile-btn');
 
 function initProfile() {
-    const savedName = localStorage.getItem('duobrain_name');
-    let savedAvatar = localStorage.getItem('duobrain_avatar');
+    const savedName = safeGetItem('duobrain_name');
+    let savedAvatar = safeGetItem('duobrain_avatar');
 
     if (savedAvatar === 'Fox') savedAvatar = '🦊';
     else if (savedAvatar === 'Panda') savedAvatar = '🐼';
@@ -134,26 +265,77 @@ function initProfile() {
     if (savedName && savedAvatar) {
         gameState.myName = savedName;
         mySelectedAvatar = savedAvatar;
-        localStorage.setItem('duobrain_avatar', mySelectedAvatar);
+        safeSetItem('duobrain_avatar', mySelectedAvatar);
         updateMiniProfileDisplay();
     }
+}
+
+
+function renderAvatar(avatarData) {
+    if (!avatarData) return '??';
+    if (avatarData.startsWith('data:image/')) {
+        return `<img src="${avatarData}" class="custom-avatar-img">`;
+    }
+    return avatarData;
 }
 
 function updateMiniProfileDisplay() {
     const disp = document.getElementById('menu-profile-display');
     if (disp) {
-        disp.innerHTML = `<span style="font-size:1.2rem; margin-right:8px;">${mySelectedAvatar}</span> <strong style="color:white;">${gameState.myName}</strong>`;
+        disp.innerHTML = `<span class="cyber-avatar" style="font-size:1.2rem;">${renderAvatar(mySelectedAvatar)}</span>`;
     }
 }
 
 document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(opt => {
     opt.onclick = (e) => {
+        if (opt.id === 'custom-avatar-btn') return;
         playSound(sfx.click);
         document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => o.classList.remove('selected'));
-        e.target.classList.add('selected');
-        mySelectedAvatar = e.target.getAttribute('data-avatar');
+        opt.classList.add('selected');
+        mySelectedAvatar = opt.getAttribute('data-avatar');
     };
 });
+
+const customAvatarBtn = document.getElementById('custom-avatar-btn');
+const customAvatarInput = document.getElementById('custom-avatar-input');
+
+if (customAvatarBtn && customAvatarInput) {
+    customAvatarBtn.onclick = () => {
+        playSound(sfx.click);
+        customAvatarInput.click();
+    };
+
+    customAvatarInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                
+                const size = Math.min(img.width, img.height);
+                const startX = (img.width - size) / 2;
+                const startY = (img.height - size) / 2;
+                
+                ctx.drawImage(img, startX, startY, size, size, 0, 0, 128, 128);
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                
+                mySelectedAvatar = compressedBase64;
+                
+                document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => o.classList.remove('selected'));
+                customAvatarBtn.classList.add('selected');
+                customAvatarBtn.innerHTML = `<img src="${compressedBase64}" class="custom-avatar-img">`;
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+}
 
 saveProfileBtn.onclick = () => {
     const n = setupNameInput.value.trim();
@@ -163,8 +345,8 @@ saveProfileBtn.onclick = () => {
     }
     playSound(sfx.click);
     gameState.myName = n;
-    localStorage.setItem('duobrain_name', n);
-    localStorage.setItem('duobrain_avatar', mySelectedAvatar);
+    safeSetItem('duobrain_name', n);
+    safeSetItem('duobrain_avatar', mySelectedAvatar);
     
     profileOverlay.classList.add('hidden-element');
     profileOverlay.style.display = 'none';
@@ -177,7 +359,13 @@ document.getElementById('menu-profile-display').onclick = () => {
     
     document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => {
         o.classList.remove('selected');
-        if (o.getAttribute('data-avatar') === mySelectedAvatar) o.classList.add('selected');
+        if (o.getAttribute('data-avatar') === mySelectedAvatar) {
+            o.classList.add('selected');
+        }
+        if (mySelectedAvatar && mySelectedAvatar.startsWith('data:image/') && o.id === 'custom-avatar-btn') {
+            o.classList.add('selected');
+            o.innerHTML = `<img src="${mySelectedAvatar}" class="custom-avatar-img">`;
+        }
     });
     
     profileOverlay.classList.remove('hidden-element');
@@ -211,22 +399,28 @@ const proTips = [
     "The host controls the category and difficulty. Pick your strongest subjects!"
 ];
 
+let currentFactTypewriter = null;
 function setHourlyFunFact() {
     const display = document.getElementById('fun-fact-display');
     if (!display) return;
     const now = new Date();
     const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
     const factIndex = uniqueHourCounter % funFacts.length;
-    display.innerHTML = funFacts[factIndex];
+    
+    if (currentFactTypewriter) clearInterval(currentFactTypewriter);
+    currentFactTypewriter = typewriterEffect(display, funFacts[factIndex], 15);
 }
 
 let currentTipIndex = 0;
+let currentTipTypewriter = null;
+
 function initProTips() {
     const display = document.getElementById('pro-tip-display');
     if (!display) return;
     
     currentTipIndex = Math.floor(Math.random() * proTips.length);
-    display.innerHTML = proTips[currentTipIndex];
+    if (currentTipTypewriter) clearInterval(currentTipTypewriter);
+    currentTipTypewriter = typewriterEffect(display, proTips[currentTipIndex], 15);
     
     display.style.transition = 'opacity 0.2s ease-in-out';
 
@@ -244,7 +438,8 @@ function initProTips() {
             
             display.style.opacity = '0';
             setTimeout(() => {
-                display.innerHTML = proTips[currentTipIndex];
+                if (currentTipTypewriter) clearInterval(currentTipTypewriter);
+                currentTipTypewriter = typewriterEffect(display, proTips[currentTipIndex], 15);
                 display.style.opacity = '1';
             }, 200); 
         };
@@ -322,7 +517,7 @@ socket = io('/');
 socket.on('connect', () => {
     const overlay = document.getElementById('entry-overlay');
     
-    const savedRoom = localStorage.getItem('duobrain_active_room');
+    const savedRoom = safeGetItem('duobrain_active_room');
     if (savedRoom) {
         gameState.roomId = savedRoom;
         socket.emit('reconnect-player', savedRoom, myPersistentId);
@@ -340,7 +535,7 @@ socket.on('connect', () => {
         
         setTimeout(() => {
             overlay.classList.add('hidden-element');
-            if (!localStorage.getItem('duobrain_name')) {
+            if (!safeGetItem('duobrain_name')) {
                 profileOverlay.style.display = 'flex';
                 profileOverlay.classList.remove('hidden-element');
             }
@@ -393,22 +588,7 @@ socket.on('resume-game', () => {
 });
 
 // SENIOR DEV FIX: P2P State Recovery system. The player who stayed sends their state.
-socket.on('request-state-sync', (targetId) => {
-    const syncData = {
-        roomId: gameState.roomId,
-        genre: gameState.genre,
-        questions: gameState.questions,
-        currentIndex: gameState.currentQuestionIndex,
-        myScore: gameState.enemyScore, // Reversed intentionally!
-        enemyScore: gameState.myScore,
-        myWager: gameState.enemyWager || null,
-        enemyWager: gameState.myWager || null,
-        avatarMe: document.getElementById('remote-avatar-display').textContent,
-        avatarThem: document.getElementById('my-avatar-display').textContent,
-        nameThem: gameState.myName
-    };
-    socket.emit('sync-state', targetId, syncData);
-});
+// Sync state is now server-authoritative
 
 // SENIOR DEV FIX: Reconnecting player receives state and instantly rebuilds the UI
 socket.on('recover-game', (data) => {
@@ -421,8 +601,8 @@ socket.on('recover-game', (data) => {
     gameState.myWager = data.myWager;
     gameState.enemyWager = data.enemyWager;
 
-    document.getElementById('my-avatar-display').textContent = data.avatarMe;
-    document.getElementById('remote-avatar-display').textContent = data.avatarThem;
+    document.getElementById('my-avatar-display').innerHTML = renderAvatar(data.avatarMe);
+    document.getElementById('remote-avatar-display').innerHTML = renderAvatar(data.avatarThem);
     document.getElementById('remote-label').textContent = data.nameThem;
 
     document.getElementById('p1-score-display').textContent = `Me: ${gameState.myScore}`;
@@ -463,6 +643,9 @@ socket.on('default-win', () => {
     
     document.getElementById('powerups-ui').style.display = 'none';
     
+    // Switch back to the quiz screen to show the victory panel
+    switchScreen(screens.quiz);
+    
     document.getElementById('question-text').textContent = "Match Forfeited";
 
     optsContainer.innerHTML = `
@@ -475,7 +658,7 @@ socket.on('default-win', () => {
     
     document.getElementById('back-menu-forfeit').onclick = () => {
         playSound(sfx.click);
-        localStorage.removeItem('duobrain_active_room');
+        safeRemoveItem('duobrain_active_room');
         setTimeout(() => window.location.reload(), 150);
     };
     
@@ -490,7 +673,7 @@ socket.on('default-win', () => {
 socket.on('room-created', id => { 
     gameState.role = 'host';
     gameState.roomId = id;
-    localStorage.setItem('duobrain_active_room', id);
+    safeSetItem('duobrain_active_room', id);
     document.getElementById('room-code-display').textContent = id; 
     switchScreen(screens.lobby); 
 });
@@ -498,7 +681,7 @@ socket.on('room-created', id => {
 socket.on('room-joined', (id, hostGenre, hostDiff) => {
     gameState.roomId = id;
     gameState.role = 'guest';
-    localStorage.setItem('duobrain_active_room', id);
+    safeSetItem('duobrain_active_room', id);
     document.getElementById('room-code-display').textContent = id;
     
     document.getElementById('lobby-genre').style.pointerEvents = 'none';
@@ -578,7 +761,7 @@ socket.on('opponent-disconnected', () => {
     clearInterval(pauseTimerInterval); 
     showToast(`Opponent disconnected! Returning to menu...`);
     playSound(sfx.lose);
-    localStorage.removeItem('duobrain_active_room');
+    safeRemoveItem('duobrain_active_room');
     setTimeout(() => window.location.reload(), 2500);
 });
 
@@ -594,8 +777,8 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
     const me = players.find(p => p.id === socket.id); const them = players.find(p => p.id !== socket.id);
     gameState.role = me.role;
     
-    document.getElementById('my-avatar-display').textContent = me.avatar;
-    document.getElementById('remote-avatar-display').textContent = them.avatar;
+    document.getElementById('my-avatar-display').innerHTML = renderAvatar(me.avatar);
+    document.getElementById('remote-avatar-display').innerHTML = renderAvatar(them.avatar);
     document.getElementById('remote-label').textContent = them.name;
     
     startCountdownSequence();
@@ -669,11 +852,13 @@ socket.on('wager-phase-complete', (wagers) => {
     playSound(sfx.win); 
 });
 
-socket.on('round-results', (answers, correctAns) => {
+socket.on('round-results', (answers, correctAns, serverScores) => {
     clearInterval(questionTimer);
     stopSound(sfx.tick); 
     isWaitingForOpponent = false;
     timerDisplay.classList.add('hidden-element');
+    const tbc = document.getElementById('timer-bar-container');
+    if (tbc) tbc.classList.add('hidden-element');
     optsContainer.classList.remove('options-grid'); 
 
     const q = gameState.questions[gameState.currentQuestionIndex];
@@ -689,27 +874,9 @@ socket.on('round-results', (answers, correctAns) => {
     const myAns = myData.index;
     const enemyAns = enemyData.index;
 
-    if (gameState.currentQuestionIndex < 4) {
-        if (myAns === q.answer) gameState.myScore++;
-        if (enemyAns === q.answer) gameState.enemyScore++;
-    } else if (gameState.currentQuestionIndex === 4) {
-        if (myAns === q.answer) gameState.myScore += gameState.myWager;
-        else gameState.myScore -= gameState.myWager;
-
-        if (enemyAns === q.answer) gameState.enemyScore += gameState.enemyWager;
-        else gameState.enemyScore -= gameState.enemyWager;
-    } else if (gameState.currentQuestionIndex === 5) {
-        if (myAns === q.answer && enemyAns !== q.answer) {
-            gameState.myScore++;
-        } else if (enemyAns === q.answer && myAns !== q.answer) {
-            gameState.enemyScore++;
-        } else if (myAns === q.answer && enemyAns === q.answer) {
-            if (myData.time > enemyData.time) {
-                gameState.myScore++; 
-            } else if (enemyData.time > myData.time) {
-                gameState.enemyScore++;
-            }
-        }
+    if (serverScores) {
+        gameState.myScore = serverScores[myPersistentId] || 0;
+        gameState.enemyScore = serverScores[enemyId] || 0;
     }
 
     document.getElementById('p1-score-display').textContent = `Me: ${gameState.myScore}`;
@@ -816,15 +983,17 @@ socket.on('round-results', (answers, correctAns) => {
                 else if (!gameState.difficulty && d.id === 'any') { p.classList.add('selected'); }
                 rdiff.appendChild(p);
             });
-            document.getElementById('rematch-btn').onclick = () => {
+            document.getElementById('rematch-btn').onclick = (e) => {
                 playSound(sfx.click);
+                e.target.disabled = true;
+                e.target.textContent = "Loading...";
                 const activeGenreBtn = document.querySelector('#rematch-genre .genre-option.selected');
                 const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
                 socket.emit('play-again', gameState.roomId, finalGenre, selDiff);
             };
             document.getElementById('back-menu-btn').onclick = () => {
                 playSound(sfx.click);
-                localStorage.removeItem('duobrain_active_room');
+                safeRemoveItem('duobrain_active_room');
                 setTimeout(() => window.location.reload(), 150);
             };
         } else {
@@ -849,7 +1018,7 @@ socket.on('round-results', (answers, correctAns) => {
             });
             document.getElementById('back-menu-btn-guest').onclick = () => {
                 playSound(sfx.click);
-                localStorage.removeItem('duobrain_active_room');
+                safeRemoveItem('duobrain_active_room');
                 setTimeout(() => window.location.reload(), 150);
             };
         }
@@ -901,12 +1070,30 @@ function renderQuestion() {
     
     optsContainer.innerHTML = '';
     timerDisplay.classList.remove('hidden-element');
+    
+    const timerBarContainer = document.getElementById('timer-bar-container');
+    const timerBar = document.getElementById('timer-bar');
+    if (timerBarContainer) timerBarContainer.classList.remove('hidden-element');
+    if (timerBar) {
+        timerBar.style.width = '100%';
+        timerBar.style.backgroundColor = '#10b981';
+    }
+    
     timerDisplay.textContent = `${timeLeft}s`;
     clearInterval(questionTimer);
     questionTimer = setInterval(() => {
         if (isPaused) return;
         const remainingMs = expectedEndTime - Date.now();
         timeLeft = Math.ceil(remainingMs / 1000);
+        
+        if (timerBar) {
+            let percentage = Math.max(0, (remainingMs / (durationSec * 1000)) * 100);
+            timerBar.style.width = `${percentage}%`;
+            if (percentage <= 20) timerBar.style.backgroundColor = '#ef4444';
+            else if (percentage <= 50) timerBar.style.backgroundColor = '#f59e0b';
+            else timerBar.style.backgroundColor = '#10b981';
+        }
+        
         if (timeLeft <= 0) {
             timeLeft = 0; timerDisplay.textContent = `0s`; clearInterval(questionTimer); stopSound(sfx.tick); 
             isWaitingForOpponent = true;
@@ -1012,31 +1199,40 @@ function resetPowerUps() {
 
 document.getElementById('pu-5050').onclick = function() {
     if (powerUps.fifty || gameState.currentQuestionIndex >= 6) return;
-    powerUps.fifty = true; this.classList.add('used'); playSound(sfx.click);
+    powerUps.fifty = true; this.classList.add('used'); playSound(sfx.click); playDecryptSound();
     showToast("You activated Decrypt!");
     if(socket) socket.emit('trigger-powerup', gameState.roomId, '5050', gameState.myName);
     const q = gameState.questions[gameState.currentQuestionIndex];
     const buttons = document.querySelectorAll('.option-btn');
     q.removableIndices.forEach(idx => {
         if (idx !== undefined && buttons[idx] && !buttons[idx].disabled) {
-            buttons[idx].style.opacity = '0.2'; buttons[idx].disabled = true;
+            buttons[idx].classList.add('decrypt-glitch-out');
+            buttons[idx].disabled = true;
         }
     });
+    document.body.classList.add('decrypt-screen-flash');
+    setTimeout(() => document.body.classList.remove('decrypt-screen-flash'), 500);
 };
 
 document.getElementById('pu-freeze').onclick = function() {
     if (powerUps.freeze || gameState.currentQuestionIndex >= 6) return;
-    powerUps.freeze = true; this.classList.add('used'); playSound(sfx.click);
+    powerUps.freeze = true; this.classList.add('used'); playSound(sfx.click); playOverclockSound();
     showToast("You activated Overclock!");
     if(socket) socket.emit('trigger-powerup', gameState.roomId, 'freeze', gameState.myName);
     expectedEndTime += 8000; 
     timerDisplay.textContent = `${Math.ceil((expectedEndTime - Date.now())/1000)}s`;
-    timerDisplay.classList.add('frozen-text');
+    timerDisplay.classList.add('overclock-active');
+    document.body.classList.add('overclock-screen-flash');
+    setTimeout(() => {
+        timerDisplay.classList.remove('overclock-active');
+        document.body.classList.remove('overclock-screen-flash');
+        timerDisplay.classList.add('frozen-text');
+    }, 1000);
 };
 
 document.getElementById('pu-jammer').onclick = function() {
     if (powerUps.jammer || gameState.currentQuestionIndex >= 6) return;
-    powerUps.jammer = true; this.classList.add('used'); playSound(sfx.click);
+    powerUps.jammer = true; this.classList.add('used'); playSound(sfx.click); playGlitchSound();
     showToast("You glitched their screen!");
     if(socket) socket.emit('trigger-powerup', gameState.roomId, 'jammer', gameState.myName);
 };
@@ -1138,3 +1334,28 @@ document.getElementById('send-chat-btn').onclick = () => {
     addMsg("You", t, true); chatIn.value = "";
 };
 document.getElementById('chat-input').onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
+
+// --- SMART MOBILE SCROLLING ---
+if (chatIn) {
+    chatIn.addEventListener('focus', () => {
+        setTimeout(() => {
+            chatIn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+    });
+}
+
+// --- TYPEWRITER EFFECT ---
+function typewriterEffect(element, text, speed = 15) {
+    element.innerHTML = '';
+    let i = 0;
+    const interval = setInterval(() => {
+        if (i < text.length) {
+            element.innerHTML += text.charAt(i);
+            i++;
+        } else {
+            clearInterval(interval);
+        }
+    }, speed);
+    return interval;
+}
+

@@ -46,7 +46,7 @@ const categoryMap = {
     general: 9, vehicles: 28, politics: 24, celebs: 26, theatre: 13, cartoons: 32
 };
 
-async function fetchQuestionsFromDB(genre, difficulty = 'any') {
+async function fetchQuestionsFromDB(genre, difficulty = 'any', amount = 6) {
     const categoryId = categoryMap[genre] || 9; 
     let matchFilter = { category: categoryId };
     if (difficulty !== 'any') {
@@ -56,26 +56,26 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any') {
     try {
         let rawQuestions = await Question.aggregate([
             { $match: matchFilter },
-            { $sample: { size: 6 } }
+            { $sample: { size: amount } }
         ]);
 
-        if ((!rawQuestions || rawQuestions.length < 6) && difficulty !== 'any') {
+        if ((!rawQuestions || rawQuestions.length < amount) && difficulty !== 'any') {
             rawQuestions = await Question.aggregate([
                 { $match: { category: categoryId } },
-                { $sample: { size: 6 } }
+                { $sample: { size: amount } }
             ]);
         }
 
-        if (!rawQuestions || rawQuestions.length < 6) {
+        if (!rawQuestions || rawQuestions.length < amount) {
             rawQuestions = await Question.aggregate([
                 { $match: { category: 9 } },
-                { $sample: { size: 6 } }
+                { $sample: { size: amount } }
             ]);
         }
 
-        if (!rawQuestions || rawQuestions.length < 6) {
+        if (!rawQuestions || rawQuestions.length < amount) {
             rawQuestions = await Question.aggregate([
-                { $sample: { size: 6 } }
+                { $sample: { size: amount } }
             ]);
         }
 
@@ -118,7 +118,7 @@ io.on('connection', (socket) => {
         const roomId = generateRoomCode();
         rooms[roomId] = { 
             players: [], genre: genre, difficulty: difficulty, answers: {}, questions: [], 
-            currentQuestionIndex: 0, wagers: {}, status: 'lobby', disconnectTimer: null 
+            currentQuestionIndex: 0, wagers: {}, status: 'lobby', disconnectTimer: null, scores: {}, powerupsUsed: {}, questionStartTime: 0
         };
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'host', connected: true });
@@ -131,6 +131,7 @@ io.on('connection', (socket) => {
         roomId = roomId.toUpperCase();
         if (!rooms[roomId]) return socket.emit('join-error', 'Room not found.');
         if (rooms[roomId].status !== 'lobby') return socket.emit('join-error', 'Game already in progress.');
+        if (rooms[roomId].players.length >= 2) return socket.emit('join-error', 'Room is full.');
         
         socket.join(roomId);
         rooms[roomId].players.push({ id: socket.id, playerId: playerId, avatar, name: playerName, role: 'guest', connected: true });
@@ -168,7 +169,9 @@ io.on('connection', (socket) => {
                     q: q.q, options: q.options, removableIndices: q.removableIndices 
                 }));
                 
+                room.players.forEach(p => room.scores[p.playerId] = 0);
                 room.status = 'playing';
+                room.questionStartTime = Date.now();
                 io.to(roomId).emit('game-start', room.players, room.genre, roomId, sanitizedQuestions);
             } catch (error) {
                 console.error("Game Start Error:", error);
@@ -178,18 +181,53 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('send-chat', (roomId, data) => socket.to(roomId).emit('receive-chat', data));
+
+    socket.on('send-chat', (roomId, data) => {
+        if (data && data.text) {
+            data.text = String(data.text).substring(0, 200);
+            socket.to(roomId).emit('receive-chat', data);
+        }
+    });
 
     // SENIOR DEV FIX: Map answers to persistent playerId, not volatile socket.id
     socket.on('submit-answer', (roomId, answerIndex, timeRemaining, playerId) => {
         const room = rooms[roomId];
         if (!room) return;
         
-        room.answers[playerId] = { index: answerIndex, time: timeRemaining };
+        // Calculate real time taken instead of trusting client
+        const realTimeTaken = Date.now() - room.questionStartTime;
+        room.answers[playerId] = { index: answerIndex, time: realTimeTaken };
 
         if (Object.keys(room.answers).length === 2) {
             const correctAns = room.questions[room.currentQuestionIndex].answer;
-            io.to(roomId).emit('round-results', room.answers, correctAns);
+            
+            const playerIds = Object.keys(room.answers);
+            const p1 = playerIds[0];
+            const p2 = playerIds[1];
+            const ans1 = room.answers[p1];
+            const ans2 = room.answers[p2];
+
+            if (room.currentQuestionIndex < 4) {
+                if (ans1.index === correctAns) room.scores[p1]++;
+                if (ans2.index === correctAns) room.scores[p2]++;
+            } else if (room.currentQuestionIndex === 4) {
+                if (ans1.index === correctAns) room.scores[p1] += (room.wagers[p1] || 0);
+                else room.scores[p1] -= (room.wagers[p1] || 0);
+
+                if (ans2.index === correctAns) room.scores[p2] += (room.wagers[p2] || 0);
+                else room.scores[p2] -= (room.wagers[p2] || 0);
+            } else if (room.currentQuestionIndex === 5) {
+                if (ans1.index === correctAns && ans2.index !== correctAns) {
+                    room.scores[p1]++;
+                } else if (ans2.index === correctAns && ans1.index !== correctAns) {
+                    room.scores[p2]++;
+                } else if (ans1.index === correctAns && ans2.index === correctAns) {
+                    if (ans1.time < ans2.time) room.scores[p1]++;
+                    else if (ans2.time < ans1.time) room.scores[p2]++;
+                }
+            }
+
+            io.to(roomId).emit('round-results', room.answers, correctAns, room.scores);
             room.answers = {}; 
         } else {
             io.to(roomId).emit('player-waiting');
@@ -203,20 +241,26 @@ io.on('connection', (socket) => {
             if (room.currentQuestionIndex === 4) {
                 io.to(roomId).emit('start-wager-phase', room.genre);
             } else {
+                room.questionStartTime = Date.now();
                 io.to(roomId).emit('load-next-question');
             }
         }
     });
 
-    // SENIOR DEV FIX: Map wagers to persistent playerId
+    // SENIOR DEV FIX: Map wagers to persistent playerId and validate
     socket.on('submit-wager', (roomId, amount, playerId) => {
         const room = rooms[roomId];
         if (!room) return;
-        room.wagers[playerId] = amount;
+        
+        let safeAmount = parseInt(amount);
+        if (isNaN(safeAmount) || safeAmount < 1 || safeAmount > 3) safeAmount = 1;
+        
+        room.wagers[playerId] = safeAmount;
         
         if (Object.keys(room.wagers).length === 2) {
             io.to(roomId).emit('wager-phase-complete', room.wagers);
             setTimeout(() => {
+                room.questionStartTime = Date.now();
                 io.to(roomId).emit('load-next-question');
             }, 2500); 
         }
@@ -230,7 +274,7 @@ io.on('connection', (socket) => {
 
     socket.on('play-again', async (roomId, newGenre, newDifficulty) => {
         const room = rooms[roomId];
-        if (room) {
+        if (room && room.status !== 'fetching') {
             room.status = 'fetching';
             try {
                 room.genre = newGenre; 
@@ -238,6 +282,9 @@ io.on('connection', (socket) => {
                 room.answers = {};
                 room.wagers = {}; 
                 room.currentQuestionIndex = 0; 
+                room.powerupsUsed = {};
+                room.questionStartTime = Date.now();
+                Object.keys(room.scores).forEach(id => room.scores[id] = 0);
                 room.questions = await fetchQuestionsFromDB(newGenre, newDifficulty);
                 
                 const sanitizedQuestions = room.questions.map(q => ({ 
@@ -254,11 +301,18 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('trigger-powerup', (roomId, type, playerName) => socket.to(roomId).emit('enemy-powerup', type, playerName));
-
-    // SENIOR DEV FIX: P2P State Recovery Router
-    socket.on('sync-state', (targetId, syncData) => {
-        io.to(targetId).emit('recover-game', syncData);
+    socket.on('trigger-powerup', (roomId, type, playerName) => {
+        const room = rooms[roomId];
+        if (room) {
+            const player = room.players.find(p => p.id === socket.id);
+            if (player) {
+                if (!room.powerupsUsed[player.playerId]) room.powerupsUsed[player.playerId] = {};
+                if (!room.powerupsUsed[player.playerId][type]) {
+                    room.powerupsUsed[player.playerId][type] = true;
+                    socket.to(roomId).emit('enemy-powerup', type, playerName);
+                }
+            }
+        }
     });
 
     socket.on('reconnect-player', (roomId, playerId) => {
@@ -276,10 +330,26 @@ io.on('connection', (socket) => {
                     room.disconnectTimer = null;
                     io.to(roomId).emit('resume-game');
                     
-                    // Ask the surviving player to beam their UI state to the reconnecting player
                     const otherPlayer = room.players.find(p => p.id !== socket.id);
                     if (otherPlayer) {
-                        io.to(otherPlayer.id).emit('request-state-sync', socket.id);
+                        const sanitizedQuestions = room.questions ? room.questions.map(q => ({ 
+                            q: q.q, options: q.options, removableIndices: q.removableIndices 
+                        })) : [];
+                        
+                        const syncData = {
+                            roomId: roomId,
+                            genre: room.genre,
+                            questions: sanitizedQuestions,
+                            currentIndex: room.currentQuestionIndex,
+                            myScore: room.scores[playerId] || 0,
+                            enemyScore: room.scores[otherPlayer.playerId] || 0,
+                            myWager: room.wagers[playerId] || null,
+                            enemyWager: room.wagers[otherPlayer.playerId] || null,
+                            avatarMe: player.avatar,
+                            avatarThem: otherPlayer.avatar,
+                            nameThem: otherPlayer.name
+                        };
+                        io.to(socket.id).emit('recover-game', syncData);
                     }
                 }
             }
