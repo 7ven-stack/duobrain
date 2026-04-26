@@ -101,7 +101,13 @@
         
         <section id="menu-screen" class="card active-screen">
             <button id="help-btn" class="help-btn" title="How to Play" aria-label="Open How to Play">?</button>
-            <button id="mute-btn" class="help-btn" title="Toggle Audio" aria-label="Toggle Audio">🔊</button>
+            <button id="mute-btn" class="help-btn" title="Toggle Audio" aria-label="Toggle Audio" style="display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+            </button>
             
             <div id="menu-profile-display" style="position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);" title="Click to edit profile">
                 <span class="cyber-avatar" style="font-size:1.2rem;">🦊</span>
