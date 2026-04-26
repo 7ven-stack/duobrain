@@ -1,4 +1,4 @@
-const CACHE_NAME = 'duobrain-cache-v5';
+const CACHE_NAME = 'duobrain-cache-v11';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -9,8 +9,7 @@ const urlsToCache = [
     '/tick.mp3',
     '/win.mp3',
     '/lose.mp3',
-    '/bgm.mp3',
-    '/calm-space-constellations-moewalls-com.mp4'
+    '/bgm.mp3'
 ];
 
 // Install the new service worker and force it to take over immediately
@@ -52,8 +51,8 @@ self.addEventListener('fetch', event => {
                 return response;
             })
             .catch(() => {
-                // If the network completely fails, THEN pull from the cache
-                return caches.match(event.request);
+                // If the network completely fails, THEN pull from the cache, ignoring query strings
+                return caches.match(event.request, { ignoreSearch: true });
             })
     );
 });

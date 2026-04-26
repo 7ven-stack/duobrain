@@ -12,7 +12,7 @@
 h1, h2, h3, h4, h5, h6, button, input, .massive-code, .glitch-text, .series-badge, .badge, .turn-badge, .timer-badge { font-family: 'Oxanium', sans-serif; }
 
 #bg-image {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
     z-index: -1; object-fit: cover; filter: brightness(0.2) contrast(1.1);
 }
 
@@ -37,7 +37,7 @@ body {
 }
 
 .help-btn { 
-    position: absolute; top: 25px; right: 25px; 
+    position: absolute; top: 25px; left: 25px; 
     width: 32px; height: 32px; border-radius: 0; 
     background: #222; border: none; 
     font-size: 1rem; font-weight: 800; color: var(--primary-color); 
@@ -50,10 +50,10 @@ body {
     background: var(--primary-color); color: #000; 
     transform: translateX(2px);
 }
-#mute-btn { right: 65px; }
+#mute-btn { left: 65px; }
 
 .modal { 
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; 
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
     background: rgba(0,0,0,0.85); z-index: 1000; 
     display: flex; justify-content: center; align-items: center; 
     backdrop-filter: blur(5px); 
@@ -70,12 +70,12 @@ body {
 .modal.hidden-element .modal-content { transform: scale(0.9) translateY(20px); }
 
 .close-btn { 
-    position: absolute; top: 15px; right: 20px; background: transparent; 
-    border: none; color: var(--text-muted); font-size: 2.2rem; 
-    padding: 0; width: auto; box-shadow: none; line-height: 1; 
+    position: absolute; top: 15px; right: 15px; background: transparent; 
+    border: none; color: var(--text-muted); 
+    padding: 5px; width: auto; height: auto; display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: 0.2s; 
 }
-.close-btn:hover { color: #ef4444; transform: scale(1.1); filter: none; background: transparent;}
+.close-btn:hover { color: #ef4444; transform: scale(1.1); background: transparent; }
 
 .rules-scroll { 
     overflow-y: auto; padding-right: 15px; text-align: left; 
@@ -136,8 +136,8 @@ input::placeholder { color: #555; }
 
 @keyframes pulseGlow { 0%, 100% { transform: scale(1); text-shadow: 0 0 20px rgba(99, 102, 241, 0.6); opacity: 0.9; } 50% { transform: scale(1.03); text-shadow: 0 0 50px rgba(99, 102, 241, 1); opacity: 1; } }
 
-.avatar-selector { display: flex; justify-content: space-evenly; width: 100%; margin-bottom: 25px; }
-.avatar-option { font-size: 2.2rem; cursor: pointer; width: 65px; height: 65px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid transparent; transition: 0.3s; }
+.avatar-selector { display: flex; justify-content: space-evenly; flex-wrap: wrap; gap: 10px; width: 100%; margin-bottom: 25px; }
+.avatar-option { flex-shrink: 0; font-size: 2.2rem; cursor: pointer; width: 65px; height: 65px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid transparent; transition: 0.3s; }
 .avatar-option.selected { border-color: var(--primary-color); background: rgba(99, 102, 241, 0.25); box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
 
 .genre-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin: 0 auto 25px auto; }
@@ -336,7 +336,7 @@ button { width: 100%; padding: 18px; border: none; border-radius: 0; font-size: 
    ========================================================= */
 @media (max-width: 800px) {
     .app-container { max-width: 500px; padding: 20px 10px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); justify-content: flex-start; }
-    .card { padding: 25px 20px; border-radius: 24px; }
+    .card { padding: 25px 20px !important; border-radius: 24px; }
     .split-layout { flex-direction: column; gap: 0; }
     .divider { flex-direction: row; width: 100%; padding: 20px 0; }
     .divider::before, .divider::after { height: 1px; width: 100%; max-height: 1px; background: linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent); margin: 0 15px; }
@@ -344,9 +344,14 @@ button { width: 100%; padding: 18px; border: none; border-radius: 0; font-size: 
     
     #options-container { min-height: 260px; }
     
-    h1 { font-size: 1.8rem; }
+    h1 { font-size: 2rem !important; }
+    h2 { font-size: 1.6rem !important; }
+    #countdown-text { font-size: 5rem !important; }
+    #wager-screen h2 { font-size: 2.2rem !important; }
+    #room-code-display { font-size: 2.5rem !important; }
+
     .massive-code { font-size: 3rem; letter-spacing: 10px; padding: 15px; border-width: 2px; }
-    .avatar-large { width: 60px; height: 60px; font-size: 2rem; }
+    .avatar-large { width: 55px; height: 55px; font-size: 1.8rem; flex-shrink: 0; }
     .profiles-container { gap: 15px; }
     .vs-text { font-size: 1.3rem; }
     .genre-option { font-size: 0.65rem; padding: 10px 0; }
@@ -367,9 +372,9 @@ button { width: 100%; padding: 18px; border: none; border-radius: 0; font-size: 
     .help-btn { top: 12px; right: 12px; width: 28px; height: 28px; font-size: 0.95rem; }
     #mute-btn { right: 48px; }
     
-    .modal-content { padding: 20px; max-height: 80vh; }
-    .modal-content h2 { font-size: 1.3rem !important; margin-bottom: 10px !important; }
-    .close-btn { top: 10px; right: 15px; font-size: 1.8rem; }
+    .modal-content { padding: 25px 20px !important; max-height: 85vh; }
+    .modal-content h2 { font-size: 1.5rem !important; margin-bottom: 10px !important; }
+    .close-btn { top: 12px; right: 12px; padding: 4px; }
     .rules-scroll h3 { font-size: 0.9rem; margin: 10px 0 5px 0; }
     .rules-scroll p { font-size: 0.8rem; margin-bottom: 8px; line-height: 1.4; }
     .rules-scroll ul { gap: 8px; margin-top: 5px; }

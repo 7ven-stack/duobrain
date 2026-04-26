@@ -2,9 +2,9 @@ let socket = null;
 const connectionStartTime = Date.now();
 
 const memoryStorage = {};
-function safeGetItem(key) { try { return localStorage.getItem(key) || memoryStorage[key]; } catch(e) { return memoryStorage[key]; } }
-function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) { memoryStorage[key] = val; } }
-function safeRemoveItem(key) { try { localStorage.removeItem(key); } catch(e) { delete memoryStorage[key]; } }
+function safeGetItem(key) { try { return localStorage.getItem(key) || memoryStorage[key]; } catch (e) { return memoryStorage[key]; } }
+function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch (e) { memoryStorage[key] = val; } }
+function safeRemoveItem(key) { try { localStorage.removeItem(key); } catch (e) { delete memoryStorage[key]; } }
 
 let myPersistentId = safeGetItem('duobrain_user_id');
 if (!myPersistentId) {
@@ -20,15 +20,15 @@ const gameState = {
 };
 
 let questionTimer = null;
-let countdownTimer = null; 
-let timeLeft = 20; 
+let countdownTimer = null;
+let timeLeft = 20;
 let expectedEndTime = 0;
 let isPaused = false;
 let pausedRemainingMs = 0;
-let tickSoundPlayedForSecond = -1; 
+let tickSoundPlayedForSecond = -1;
 let powerUps = { fifty: false, freeze: false, jammer: false };
-let isWaitingForOpponent = false; 
-let isMatchFinished = false; 
+let isWaitingForOpponent = false;
+let isMatchFinished = false;
 
 let pauseTimerInterval = null;
 let pauseCountdown = 30; // 30 second grace period for disconnects
@@ -36,8 +36,8 @@ let pauseCountdown = 30; // 30 second grace period for disconnects
 // --- SAFE BACKGROUND UPDATER ---
 function updateBackground(isSuddenDeath) {
     const bgEl = document.getElementById('bg-image') || document.getElementById('bg-video');
-    if (!bgEl) return; 
-    
+    if (!bgEl) return;
+
     if (isSuddenDeath) {
         bgEl.classList.add('sudden-death-bg');
     } else {
@@ -66,12 +66,12 @@ async function loadAudio(name, url) {
 }
 
 // Pre-load all SFX into memory for 0ms latency
-loadAudio('click', 'click.mp3');
-loadAudio('tick', 'tick.mp3');
-loadAudio('notif', 'notif.mp3');
-loadAudio('win', 'win.mp3');
-loadAudio('lose', 'lose.mp3');
-loadAudio('bgm', 'bgm.mp3');
+loadAudio('click', 'click.mp3?v=2');
+loadAudio('tick', 'tick.mp3?v=2');
+loadAudio('notif', 'notif.mp3?v=2');
+loadAudio('win', 'win.mp3?v=2');
+loadAudio('lose', 'lose.mp3?v=2');
+loadAudio('bgm', 'bgm.mp3?v=2');
 
 const sfx = {
     click: { name: 'click', vol: 0.5 },
@@ -84,42 +84,42 @@ const sfx = {
 
 function playSound(audioObj) {
     if (!audioObj || !audioBuffers[audioObj.name]) return;
-    
+
     // Prevent overlapping for tick to avoid phasing
     if (audioObj.name === 'tick') {
         stopSound(audioObj);
     }
-    
+
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffers[audioObj.name];
-    
+
     const gainNode = audioCtx.createGain();
     gainNode.gain.value = audioObj.vol;
-    
+
     source.connect(gainNode);
     gainNode.connect(masterGain);
-    
+
     source.start(0);
-    
+
     audioObj.activeSources = audioObj.activeSources || [];
     audioObj.activeSources.push({ source, gainNode });
-    
+
     source.onended = () => {
         const i = audioObj.activeSources.findIndex(s => s.source === source);
         if (i > -1) audioObj.activeSources.splice(i, 1);
     };
-    
+
     return source;
 }
 
 function stopSound(audioObj) {
     if (audioObj && audioObj.activeSources) {
         audioObj.activeSources.forEach(s => {
-            try { 
+            try {
                 // Smooth fade-out to prevent "popping" or "weird" zero-crossing artifacts
                 s.gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.015);
-                setTimeout(() => { try { s.source.stop(); } catch(e) {} }, 60);
-            } catch(e) {}
+                setTimeout(() => { try { s.source.stop(); } catch (e) { } }, 60);
+            } catch (e) { }
         });
         audioObj.activeSources = [];
     }
@@ -147,17 +147,17 @@ function playDecryptSound() {
         osc.type = 'square';
         osc.connect(gain);
         gain.connect(masterGain);
-        
+
         osc.frequency.setValueAtTime(800, audioCtx.currentTime);
         osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
         osc.frequency.setValueAtTime(1600, audioCtx.currentTime + 0.2);
-        
+
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        
+
         osc.start();
         osc.stop(audioCtx.currentTime + 0.3);
-    } catch(e) { console.error('Decrypt SFX error:', e); }
+    } catch (e) { console.error('Decrypt SFX error:', e); }
 }
 
 function playOverclockSound() {
@@ -168,17 +168,17 @@ function playOverclockSound() {
         osc.type = 'sawtooth';
         osc.connect(gain);
         gain.connect(masterGain);
-        
+
         osc.frequency.setValueAtTime(200, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.6);
-        
+
         gain.gain.setValueAtTime(0, audioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.2);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-        
+
         osc.start();
         osc.stop(audioCtx.currentTime + 0.6);
-    } catch(e) { console.error('Overclock SFX error:', e); }
+    } catch (e) { console.error('Overclock SFX error:', e); }
 }
 
 function playGlitchSound() {
@@ -187,7 +187,7 @@ function playGlitchSound() {
         const bufferSize = audioCtx.sampleRate * 0.5;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
-        
+
         let lastOut = 0;
         for (let i = 0; i < bufferSize; i++) {
             let white = Math.random() * 2 - 1;
@@ -195,40 +195,40 @@ function playGlitchSound() {
             lastOut = data[i];
             data[i] *= 3.5;
         }
-        
+
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
-        
+
         const filter = audioCtx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
         filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
-        
+
         const gain = audioCtx.createGain();
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-        
+
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(masterGain);
-        
+
         noise.start();
-    } catch(e) { console.error('Glitch SFX error:', e); }
+    } catch (e) { console.error('Glitch SFX error:', e); }
 }
 
 let bgmStarted = false;
 function startBGM() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    
+
     if (!bgmStarted && audioBuffers['bgm']) {
         bgmStarted = true;
         const bgmSource = audioCtx.createBufferSource();
         bgmSource.buffer = audioBuffers['bgm'];
         bgmSource.loop = true;
-        
+
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = sfx.bgm.vol;
-        
+
         bgmSource.connect(gainNode);
         gainNode.connect(masterGain);
         bgmSource.start(0);
@@ -238,7 +238,7 @@ window.addEventListener('click', startBGM);
 
 function showToast(message) {
     const tc = document.getElementById('toast-container');
-    if(!tc) return;
+    if (!tc) return;
     const t = document.createElement('div');
     t.className = 'toast';
     t.innerHTML = message;
@@ -247,8 +247,8 @@ function showToast(message) {
 }
 
 // --- PROFILE SETUP LOGIC ---
-let mySelectedAvatar = "🦊"; 
-let mySelectedGenre = "science"; 
+let mySelectedAvatar = '🐼'; // Default
+let mySelectedGenre = "science";
 let mySelectedDifficulty = "any";
 
 const profileOverlay = document.getElementById('profile-setup-overlay');
@@ -319,16 +319,16 @@ if (customAvatarBtn && customAvatarInput) {
                 canvas.width = 128;
                 canvas.height = 128;
                 const ctx = canvas.getContext('2d');
-                
+
                 const size = Math.min(img.width, img.height);
                 const startX = (img.width - size) / 2;
                 const startY = (img.height - size) / 2;
-                
+
                 ctx.drawImage(img, startX, startY, size, size, 0, 0, 128, 128);
                 const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
-                
+
                 mySelectedAvatar = compressedBase64;
-                
+
                 document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => o.classList.remove('selected'));
                 customAvatarBtn.classList.add('selected');
                 customAvatarBtn.innerHTML = `<img src="${compressedBase64}" class="custom-avatar-img">`;
@@ -349,7 +349,7 @@ saveProfileBtn.onclick = () => {
     gameState.myName = n;
     safeSetItem('duobrain_name', n);
     safeSetItem('duobrain_avatar', mySelectedAvatar);
-    
+
     profileOverlay.classList.add('hidden-element');
     profileOverlay.style.display = 'none';
     updateMiniProfileDisplay();
@@ -358,7 +358,7 @@ saveProfileBtn.onclick = () => {
 document.getElementById('menu-profile-display').onclick = () => {
     playSound(sfx.click);
     setupNameInput.value = gameState.myName;
-    
+
     document.querySelectorAll('#setup-avatar-selector .avatar-option').forEach(o => {
         o.classList.remove('selected');
         if (o.getAttribute('data-avatar') === mySelectedAvatar) {
@@ -369,7 +369,7 @@ document.getElementById('menu-profile-display').onclick = () => {
             o.innerHTML = `<img src="${mySelectedAvatar}" class="custom-avatar-img">`;
         }
     });
-    
+
     profileOverlay.classList.remove('hidden-element');
     profileOverlay.style.display = 'flex';
 };
@@ -408,7 +408,7 @@ function setHourlyFunFact() {
     const now = new Date();
     const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
     const factIndex = uniqueHourCounter % funFacts.length;
-    
+
     if (currentFactTypewriter) clearInterval(currentFactTypewriter);
     currentFactTypewriter = typewriterEffect(display, funFacts[factIndex], 15);
 }
@@ -419,31 +419,32 @@ let currentTipTypewriter = null;
 function initProTips() {
     const display = document.getElementById('pro-tip-display');
     if (!display) return;
-    
+
     currentTipIndex = Math.floor(Math.random() * proTips.length);
     if (currentTipTypewriter) clearInterval(currentTipTypewriter);
     currentTipTypewriter = typewriterEffect(display, proTips[currentTipIndex], 15);
-    
+
     display.style.transition = 'opacity 0.2s ease-in-out';
 
     const tipBox = display.closest('.quick-rules');
     if (tipBox) {
         tipBox.style.cursor = 'pointer';
         tipBox.title = 'Click for next tip';
-        
+
         tipBox.onmouseenter = () => tipBox.style.background = 'rgba(255,255,255,0.05)';
         tipBox.onmouseleave = () => tipBox.style.background = 'rgba(0, 0, 0, 0.2)';
-        
+
         tipBox.onclick = () => {
             playSound(sfx.click);
             currentTipIndex = (currentTipIndex + 1) % proTips.length;
-            
+
             display.style.opacity = '0';
-            setTimeout(() => {
+            if (window.tipTimeout) clearTimeout(window.tipTimeout);
+            window.tipTimeout = setTimeout(() => {
                 if (currentTipTypewriter) clearInterval(currentTipTypewriter);
                 currentTipTypewriter = typewriterEffect(display, proTips[currentTipIndex], 15);
                 display.style.opacity = '1';
-            }, 200); 
+            }, 200);
         };
     }
 }
@@ -451,21 +452,21 @@ function initProTips() {
 const genrePacks = [
     ["science", "math", "music", "geography", "history", "movies", "gaming", "sports", "mythology"],
     ["computers", "anime", "books", "tv", "boardgames", "comics", "gadgets", "art", "animals"],
-    ["general", "vehicles", "politics", "celebs", "theatre", "cartoons", "science", "geography", "music"] 
+    ["general", "vehicles", "politics", "celebs", "theatre", "cartoons", "science", "geography", "music"]
 ];
 
 function injectDailyGenres(containerId, isRematch = false) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    container.innerHTML = ''; 
+    container.innerHTML = '';
 
     const now = new Date();
     const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
     const activePack = genrePacks[daysSinceEpoch % genrePacks.length];
 
-    if (!isRematch) mySelectedGenre = activePack[0]; 
+    if (!isRematch) mySelectedGenre = activePack[0];
     let selGenreForRematch = isRematch ? gameState.genre : null;
-    
+
     if (isRematch && !activePack.includes(selGenreForRematch)) {
         selGenreForRematch = activePack[0];
     }
@@ -473,13 +474,13 @@ function injectDailyGenres(containerId, isRematch = false) {
     activePack.forEach((g, i) => {
         const btn = document.createElement('div');
         btn.className = 'genre-option';
-        
+
         if (!isRematch && i === 0) btn.classList.add('selected');
         if (isRematch && g === selGenreForRematch) btn.classList.add('selected');
 
         btn.textContent = g === "tv" ? "TV" : g.charAt(0).toUpperCase() + g.slice(1);
         btn.setAttribute('data-genre', g);
-        
+
         btn.setAttribute('role', 'button');
         btn.setAttribute('tabindex', '0');
         btn.setAttribute('aria-label', `Select ${g} category`);
@@ -492,25 +493,25 @@ function injectDailyGenres(containerId, isRematch = false) {
         };
 
         btn.onclick = (e) => {
-            if (gameState.role === 'guest') return; 
+            if (gameState.role === 'guest') return;
             playSound(sfx.click);
             container.querySelectorAll('.genre-option').forEach(o => o.classList.remove('selected'));
             e.target.classList.add('selected');
-            
+
             if (containerId === 'lobby-genre') {
                 mySelectedGenre = g;
-                if(socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
-            } 
+                if (socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
+            }
             else if (containerId === 'rematch-genre' || containerId === 'guest-rematch-genre') {
                 let diffContainer = document.getElementById(gameState.role === 'host' ? 'rematch-difficulty' : 'guest-rematch-difficulty');
                 let rDiff = diffContainer.querySelector('.selected').getAttribute('data-difficulty');
-                if(socket) socket.emit('update-rematch-settings', gameState.roomId, g, rDiff);
+                if (socket) socket.emit('update-rematch-settings', gameState.roomId, g, rDiff);
             }
         };
         container.appendChild(btn);
     });
 
-    return selGenreForRematch; 
+    return selGenreForRematch;
 }
 
 // --- NETWORK EVENTS ---
@@ -518,7 +519,7 @@ socket = io('/');
 
 socket.on('connect', () => {
     const overlay = document.getElementById('entry-overlay');
-    
+
     const savedRoom = safeGetItem('duobrain_active_room');
     if (savedRoom) {
         gameState.roomId = savedRoom;
@@ -526,49 +527,55 @@ socket.on('connect', () => {
     }
 
     if (overlay && !overlay.classList.contains('hidden-element')) {
-        const ping = Date.now() - connectionStartTime;
-        const statusText = overlay.querySelector('p');
-        
-        if (statusText) {
-            statusText.innerHTML = `Connected! <span style="color:white; font-size: 0.9rem;">(${ping}ms ping)</span>`;
-            statusText.style.color = '#10b981'; 
-            statusText.style.animation = 'none'; 
-        }
-        
-        setTimeout(() => {
-            overlay.classList.add('hidden-element');
-            if (!safeGetItem('duobrain_name')) {
-                profileOverlay.style.display = 'flex';
-                profileOverlay.classList.remove('hidden-element');
+        const startPing = Date.now();
+        socket.emit('ping-test', startPing, (sentTime) => {
+            const realPing = Date.now() - sentTime;
+            const statusText = overlay.querySelector('p');
+
+            if (statusText) {
+                let pingColor = "white";
+                if (realPing >= 150) pingColor = "#f59e0b"; // Orange
+                if (realPing >= 250) pingColor = "#ef4444"; // Red
+                statusText.innerHTML = `Connected! <span style="color:${pingColor}; font-size: 0.9rem;">(${realPing}ms ping)</span>`;
+                statusText.style.color = '#10b981';
+                statusText.style.animation = 'none';
             }
-        }, 600); 
+
+            setTimeout(() => {
+                overlay.classList.add('hidden-element');
+                if (!safeGetItem('duobrain_name')) {
+                    profileOverlay.style.display = 'flex';
+                    profileOverlay.classList.remove('hidden-element');
+                }
+            }, 600);
+        });
     }
 });
 
 socket.on('global-stats', (online, matches) => {
     const statOnline = document.getElementById('stat-online');
     const statMatches = document.getElementById('stat-matches');
-    if(statOnline) statOnline.textContent = online;
-    if(statMatches) statMatches.textContent = matches;
+    if (statOnline) statOnline.textContent = online;
+    if (statMatches) statMatches.textContent = matches;
 });
 
 socket.on('pause-game', (playerName) => {
     isPaused = true;
-    pausedRemainingMs = expectedEndTime - Date.now(); 
-    
+    pausedRemainingMs = expectedEndTime - Date.now();
+
     const pauseModal = document.getElementById('pause-overlay');
     const pauseText = document.getElementById('pause-text');
-    
+
     if (pauseModal && pauseText) {
         pauseCountdown = 30; // 30s UI grace period
         pauseText.textContent = `${playerName} disconnected. Waiting ${pauseCountdown}s...`;
         pauseModal.classList.remove('hidden-element');
-        
+
         clearInterval(pauseTimerInterval);
-        
+
         pauseTimerInterval = setInterval(() => {
             pauseCountdown--;
-            if(pauseCountdown > 0) {
+            if (pauseCountdown > 0) {
                 pauseText.textContent = `${playerName} disconnected. Waiting ${pauseCountdown}s...`;
             } else {
                 pauseText.textContent = `${playerName} disconnected. Waiting 0s...`;
@@ -579,12 +586,12 @@ socket.on('pause-game', (playerName) => {
 });
 
 socket.on('resume-game', () => {
-    clearInterval(pauseTimerInterval); 
+    clearInterval(pauseTimerInterval);
     if (!isPaused) return;
     isPaused = false;
-    expectedEndTime = Date.now() + pausedRemainingMs; 
+    expectedEndTime = Date.now() + pausedRemainingMs;
     showToast(`Opponent reconnected! Game resuming.`);
-    
+
     const pauseModal = document.getElementById('pause-overlay');
     if (pauseModal) pauseModal.classList.add('hidden-element');
 });
@@ -612,7 +619,7 @@ socket.on('recover-game', (data) => {
 
     document.getElementById('help-btn').style.display = 'none';
     document.querySelector('.chat-container').classList.remove('expanded-chat');
-    
+
     const profileSetup = document.getElementById('profile-setup-overlay');
     if (profileSetup) profileSetup.classList.add('hidden-element');
 
@@ -628,6 +635,12 @@ socket.on('recover-game', (data) => {
         waitText.textContent = "Choose quickly! (Recovered)";
         waitText.style.color = "var(--primary-color)";
         waitText.classList.remove('hidden-element');
+        setTimeout(() => {
+            if (!gameState.myWager) {
+                const btn = document.querySelector('.wager-btn[data-wager="1"]');
+                if (btn) btn.click();
+            }
+        }, 10000);
     } else {
         switchScreen(screens.quiz);
         renderQuestion();
@@ -637,17 +650,17 @@ socket.on('recover-game', (data) => {
 
 socket.on('default-win', () => {
     clearInterval(questionTimer);
-    clearInterval(pauseTimerInterval); 
+    clearInterval(pauseTimerInterval);
     isWaitingForOpponent = false;
-    
+
     const pauseModal = document.getElementById('pause-overlay');
     if (pauseModal) pauseModal.classList.add('hidden-element');
-    
+
     document.getElementById('powerups-ui').style.display = 'none';
-    
+
     // Switch back to the quiz screen to show the victory panel
     switchScreen(screens.quiz);
-    
+
     document.getElementById('question-text').textContent = "Match Forfeited";
 
     optsContainer.innerHTML = `
@@ -657,13 +670,13 @@ socket.on('default-win', () => {
         </div>
         <button id="back-menu-forfeit" class="secondary-btn" style="margin-top: 20px; grid-column: 1 / -1;">Back to Main Menu</button>
     `;
-    
+
     document.getElementById('back-menu-forfeit').onclick = () => {
         playSound(sfx.click);
         safeRemoveItem('duobrain_active_room');
         setTimeout(() => window.location.reload(), 150);
     };
-    
+
     document.getElementById('turn-indicator').textContent = "Forfeit";
     document.querySelector('.chat-container').classList.add('expanded-chat');
 
@@ -672,12 +685,12 @@ socket.on('default-win', () => {
     setTimeout(() => { sfx.bgm.volume = 0.3; }, 4000);
 });
 
-socket.on('room-created', id => { 
+socket.on('room-created', id => {
     gameState.role = 'host';
     gameState.roomId = id;
     safeSetItem('duobrain_active_room', id);
-    document.getElementById('room-code-display').textContent = id; 
-    switchScreen(screens.lobby); 
+    document.getElementById('room-code-display').textContent = id;
+    switchScreen(screens.lobby);
 });
 
 socket.on('room-joined', (id, hostGenre, hostDiff) => {
@@ -685,7 +698,7 @@ socket.on('room-joined', (id, hostGenre, hostDiff) => {
     gameState.role = 'guest';
     safeSetItem('duobrain_active_room', id);
     document.getElementById('room-code-display').textContent = id;
-    
+
     document.getElementById('lobby-genre').style.pointerEvents = 'none';
     document.getElementById('lobby-genre').style.opacity = '0.6';
     document.getElementById('lobby-difficulty').style.pointerEvents = 'none';
@@ -693,11 +706,11 @@ socket.on('room-joined', (id, hostGenre, hostDiff) => {
 
     document.querySelectorAll('#lobby-genre .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-genre') === hostGenre) o.classList.add('selected');
+        if (o.getAttribute('data-genre') === hostGenre) o.classList.add('selected');
     });
     document.querySelectorAll('#lobby-difficulty .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-difficulty') === hostDiff) o.classList.add('selected');
+        if (o.getAttribute('data-difficulty') === hostDiff) o.classList.add('selected');
     });
 
     document.getElementById('lobby-status-text').textContent = "Connected!";
@@ -721,22 +734,22 @@ socket.on('player-joined', (guestName) => {
 socket.on('settings-updated', (genre, diff) => {
     document.querySelectorAll('#lobby-genre .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-genre') === genre) o.classList.add('selected');
+        if (o.getAttribute('data-genre') === genre) o.classList.add('selected');
     });
     document.querySelectorAll('#lobby-difficulty .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
+        if (o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
     });
 });
 
 socket.on('rematch-settings-updated', (genre, diff) => {
     document.querySelectorAll('#guest-rematch-genre .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-genre') === genre) o.classList.add('selected');
+        if (o.getAttribute('data-genre') === genre) o.classList.add('selected');
     });
     document.querySelectorAll('#guest-rematch-difficulty .genre-option').forEach(o => {
         o.classList.remove('selected');
-        if(o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
+        if (o.getAttribute('data-difficulty') === diff) o.classList.add('selected');
     });
 });
 
@@ -748,7 +761,7 @@ socket.on('join-error', (errorMessage) => {
 socket.on('game-start-error', (errorMsg) => {
     showToast(errorMsg);
     const btn = document.getElementById('start-game-btn');
-    if(btn) {
+    if (btn) {
         btn.textContent = "Start Match";
         btn.disabled = false;
         btn.style.opacity = '1';
@@ -757,10 +770,16 @@ socket.on('game-start-error', (errorMsg) => {
 
 socket.on('opponent-disconnected', () => {
     if (isMatchFinished) {
-        showToast(`Opponent left the room.`);
-        return; 
+        showToast(`Opponent left the room. You cannot rematch.`);
+        const rematchBtn = document.getElementById('rematch-btn');
+        if (rematchBtn) {
+            rematchBtn.disabled = true;
+            rematchBtn.textContent = "Opponent Left";
+            rematchBtn.style.opacity = '0.5';
+        }
+        return;
     }
-    clearInterval(pauseTimerInterval); 
+    clearInterval(pauseTimerInterval);
     showToast(`Opponent disconnected! Returning to menu...`);
     playSound(sfx.lose);
     safeRemoveItem('duobrain_active_room');
@@ -768,21 +787,21 @@ socket.on('opponent-disconnected', () => {
 });
 
 socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
-    resetPowerUps(); 
+    resetPowerUps();
     isMatchFinished = false;
-    document.getElementById('help-btn').style.display = 'none'; 
-    document.querySelector('.chat-container').classList.remove('expanded-chat'); 
-    
-    updateBackground(false); 
-    
+    document.getElementById('help-btn').style.display = 'none';
+    document.querySelector('.chat-container').classList.remove('expanded-chat');
+
+    updateBackground(false);
+
     gameState.roomId = roomId; gameState.genre = genre; gameState.myPlayerId = socket.id; gameState.questions = sanitizedQuestions;
     const me = players.find(p => p.id === socket.id); const them = players.find(p => p.id !== socket.id);
     gameState.role = me.role;
-    
+
     document.getElementById('my-avatar-display').innerHTML = renderAvatar(me.avatar);
     document.getElementById('remote-avatar-display').innerHTML = renderAvatar(them.avatar);
     document.getElementById('remote-label').textContent = them.name;
-    
+
     startCountdownSequence();
 });
 
@@ -790,50 +809,50 @@ socket.on('start-wager-phase', (genre) => {
     document.getElementById('wager-category').textContent = genre;
     const controls = document.getElementById('wager-controls');
     const waitText = document.getElementById('wager-wait-text');
-    
+
     if (controls) {
         controls.style.opacity = '0.3';
         controls.style.pointerEvents = 'none';
     }
-    
+
     document.querySelectorAll('.wager-btn').forEach(b => {
         b.disabled = false;
         b.style.opacity = '1';
     });
-    
+
     gameState.myWager = null;
     switchScreen(screens.wager);
 
     let prepTime = 3;
     waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
     waitText.classList.remove('hidden-element');
-    
+
     clearInterval(window.wagerInterval);
-    
+
     window.wagerInterval = setInterval(() => {
         prepTime--;
         if (prepTime > 0) {
             waitText.innerHTML = `<span style="color: #ef4444; font-size: 1.3rem; font-weight: 900; animation: pulse 0.5s infinite;">READ THE CATEGORY (${prepTime}s)</span>`;
-            playSound(sfx.tick); 
+            playSound(sfx.tick);
         } else {
             clearInterval(window.wagerInterval);
             if (controls) {
                 controls.style.opacity = '1';
                 controls.style.pointerEvents = 'auto';
             }
-            
+
             let wTime = 10;
             waitText.innerHTML = `Choose quickly! (${wTime}s)`;
             waitText.style.color = "var(--primary-color)";
-            playSound(sfx.notif); 
-            
+            playSound(sfx.notif);
+
             window.wagerInterval = setInterval(() => {
                 wTime--;
                 if (!gameState.myWager) waitText.innerHTML = `Choose quickly! (${wTime}s)`;
                 if (wTime <= 0) {
                     clearInterval(window.wagerInterval);
                     if (!gameState.myWager) {
-                        document.querySelector('.wager-btn[data-wager="1"]').click(); 
+                        document.querySelector('.wager-btn[data-wager="1"]').click();
                     }
                 }
             }, 1000);
@@ -846,31 +865,31 @@ socket.on('wager-phase-complete', (wagers) => {
     gameState.myWager = wagers[myPersistentId];
     const enemyId = Object.keys(wagers).find(id => id !== myPersistentId);
     gameState.enemyWager = wagers[enemyId];
-    
+
     const waitText = document.getElementById('wager-wait-text');
     waitText.textContent = "Points Locked! Prepare for battle...";
-    waitText.style.color = "#10b981"; 
+    waitText.style.color = "#10b981";
     waitText.classList.remove('hidden-element');
-    playSound(sfx.win); 
+    playSound(sfx.win);
 });
 
 socket.on('round-results', (answers, correctAns, serverScores) => {
     clearInterval(questionTimer);
-    stopSound(sfx.tick); 
+    stopSound(sfx.tick);
     isWaitingForOpponent = false;
     timerDisplay.classList.add('hidden-element');
     const tbc = document.getElementById('timer-bar-container');
     if (tbc) tbc.classList.add('hidden-element');
-    optsContainer.classList.remove('options-grid'); 
+    optsContainer.classList.remove('options-grid');
 
     const q = gameState.questions[gameState.currentQuestionIndex];
-    q.answer = correctAns; 
+    q.answer = correctAns;
 
     // SENIOR DEV FIX: Read answers from persistent IDs to survive disconnects
     const myData = answers[myPersistentId];
     const enemyId = Object.keys(answers).find(id => id !== myPersistentId);
     const enemyData = answers[enemyId];
-    
+
     if (!myData || !enemyData) return; // Failsafe check
 
     const myAns = myData.index;
@@ -888,9 +907,9 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
     let isSuddenDeathTrigger = false;
 
     if (gameState.currentQuestionIndex < 4) {
-        goNext = true; 
+        goNext = true;
     } else if (gameState.currentQuestionIndex === 4 && gameState.myScore === gameState.enemyScore) {
-        goNext = true; 
+        goNext = true;
         isSuddenDeathTrigger = true;
     }
 
@@ -921,22 +940,22 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
             nextBtn.onclick = () => socket.emit('next-question', gameState.roomId);
             optsContainer.appendChild(nextBtn);
         } else {
-             const waitingText = document.createElement('h3');
-             waitingText.style.cssText = "margin-top: 15px; color: var(--text-muted); text-align: center; animation: pulse 1.5s infinite;";
-             waitingText.textContent = "Waiting for host...";
-             optsContainer.appendChild(waitingText);
+            const waitingText = document.createElement('h3');
+            waitingText.style.cssText = "margin-top: 15px; color: var(--text-muted); text-align: center; animation: pulse 1.5s infinite;";
+            waitingText.textContent = "Waiting for host...";
+            optsContainer.appendChild(waitingText);
         }
     } else {
         isMatchFinished = true;
         if (socket) socket.emit('match-finished', gameState.roomId);
-        document.getElementById('powerups-ui').style.display = 'none'; 
+        document.getElementById('powerups-ui').style.display = 'none';
         document.getElementById('question-text').textContent = "Match Complete";
         document.getElementById('turn-indicator').textContent = "Final";
         document.querySelector('.chat-container').classList.add('expanded-chat');
 
         let res = gameState.myScore > gameState.enemyScore ? "Victory" : (gameState.myScore < gameState.enemyScore ? "Defeat" : "Draw");
         let cls = gameState.myScore > gameState.enemyScore ? "victory-color" : (gameState.myScore < gameState.enemyScore ? "defeat-color" : "draw-color");
-        
+
         if (res === "Victory") gameState.seriesMyScore++;
         else if (res === "Defeat") gameState.seriesEnemyScore++;
         document.getElementById('series-score-display').textContent = `Series: ${gameState.seriesMyScore} - ${gameState.seriesEnemyScore}`;
@@ -970,7 +989,7 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
             let selGenre = injectDailyGenres('rematch-genre', true);
             const rdiff = document.getElementById('rematch-difficulty');
             let selDiff = "any";
-            [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
+            [{ id: 'any', text: 'Any' }, { id: 'easy', text: 'Easy' }, { id: 'medium', text: 'Med' }, { id: 'hard', text: 'Hard' }].forEach(d => {
                 const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
                 p.setAttribute('data-difficulty', d.id);
                 p.onclick = (e) => {
@@ -981,7 +1000,7 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
                     const finalGenre = activeGenreBtn ? activeGenreBtn.getAttribute('data-genre') : selGenre;
                     socket.emit('update-rematch-settings', gameState.roomId, finalGenre, selDiff);
                 };
-                if(d.id === gameState.difficulty) { p.classList.add('selected'); selDiff = d.id; } 
+                if (d.id === gameState.difficulty) { p.classList.add('selected'); selDiff = d.id; }
                 else if (!gameState.difficulty && d.id === 'any') { p.classList.add('selected'); }
                 rdiff.appendChild(p);
             });
@@ -1000,7 +1019,7 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
             };
         } else {
             const waitingBox = document.createElement('div');
-            waitingBox.className = 'rematch-box'; 
+            waitingBox.className = 'rematch-box';
             waitingBox.innerHTML = `
                 <h3 style="margin-bottom: 15px; color: var(--primary-color);">Host is setting up...</h3>
                 <div class="genre-selector" id="guest-rematch-genre" style="margin-bottom: 10px; pointer-events: none; opacity: 0.6;"></div>
@@ -1011,10 +1030,10 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
             optsContainer.appendChild(waitingBox);
             injectDailyGenres('guest-rematch-genre', true);
             const rdiff = document.getElementById('guest-rematch-difficulty');
-            [ {id: 'any', text: 'Any'}, {id: 'easy', text: 'Easy'}, {id: 'medium', text: 'Med'}, {id: 'hard', text: 'Hard'} ].forEach(d => {
+            [{ id: 'any', text: 'Any' }, { id: 'easy', text: 'Easy' }, { id: 'medium', text: 'Med' }, { id: 'hard', text: 'Hard' }].forEach(d => {
                 const p = document.createElement('div'); p.className = 'genre-option'; p.textContent = d.text;
                 p.setAttribute('data-difficulty', d.id);
-                if(d.id === gameState.difficulty) p.classList.add('selected');
+                if (d.id === gameState.difficulty) p.classList.add('selected');
                 else if (!gameState.difficulty && d.id === 'any') p.classList.add('selected');
                 rdiff.appendChild(p);
             });
@@ -1028,7 +1047,7 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
 });
 
 function startCountdownSequence() {
-    clearInterval(countdownTimer); 
+    clearInterval(countdownTimer);
     switchScreen(screens.countdown);
     let count = 3;
     const countText = document.getElementById('countdown-text');
@@ -1037,7 +1056,7 @@ function startCountdownSequence() {
     playSound(sfx.tick);
     countdownTimer = setInterval(() => {
         count--;
-        if (count > 0) { countText.textContent = count; playSound(sfx.tick); } 
+        if (count > 0) { countText.textContent = count; playSound(sfx.tick); }
         else {
             clearInterval(countdownTimer);
             countText.classList.remove('countdown-pulse');
@@ -1048,9 +1067,9 @@ function startCountdownSequence() {
 }
 
 function renderQuestion() {
-    stopSound(sfx.tick); 
-    optsContainer.classList.remove('jammed-state'); 
-    optsContainer.classList.add('options-grid'); 
+    stopSound(sfx.tick);
+    optsContainer.classList.remove('jammed-state');
+    optsContainer.classList.add('options-grid');
     const currentQ = gameState.questions[gameState.currentQuestionIndex];
     document.getElementById('question-text').textContent = currentQ.q;
     isPaused = false;
@@ -1069,10 +1088,10 @@ function renderQuestion() {
         document.getElementById('turn-indicator').textContent = `Round ${gameState.currentQuestionIndex + 1}`;
         updateBackground(false);
     }
-    
+
     optsContainer.innerHTML = '';
-    timerDisplay.classList.remove('hidden-element');
-    
+    timerDisplay.classList.remove('hidden-element', 'frozen-text', 'ice-flash', 'overclock-active');
+
     const timerBarContainer = document.getElementById('timer-bar-container');
     const timerBar = document.getElementById('timer-bar');
     if (timerBarContainer) timerBarContainer.classList.remove('hidden-element');
@@ -1080,32 +1099,32 @@ function renderQuestion() {
         timerBar.style.width = '100%';
         timerBar.style.backgroundColor = '#10b981';
     }
-    
+
     timerDisplay.textContent = `${timeLeft}s`;
     clearInterval(questionTimer);
     questionTimer = setInterval(() => {
         if (isPaused) return;
         const remainingMs = expectedEndTime - Date.now();
         timeLeft = Math.ceil(remainingMs / 1000);
-        
+
         if (timerBar) {
-            let percentage = Math.max(0, (remainingMs / (durationSec * 1000)) * 100);
+            let percentage = Math.max(0, Math.min(100, (remainingMs / (durationSec * 1000)) * 100));
             timerBar.style.width = `${percentage}%`;
             if (percentage <= 20) timerBar.style.backgroundColor = '#ef4444';
             else if (percentage <= 50) timerBar.style.backgroundColor = '#f59e0b';
             else timerBar.style.backgroundColor = '#10b981';
         }
-        
+
         if (timeLeft <= 0) {
-            timeLeft = 0; timerDisplay.textContent = `0s`; clearInterval(questionTimer); stopSound(sfx.tick); 
+            timeLeft = 0; timerDisplay.textContent = `0s`; clearInterval(questionTimer); stopSound(sfx.tick);
             isWaitingForOpponent = true;
-            if(socket) socket.emit('submit-answer', gameState.roomId, -1, 0, myPersistentId);
+            if (socket) socket.emit('submit-answer', gameState.roomId, -1, 0, myPersistentId);
             optsContainer.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; border: 2px dashed #ef4444;"><h3 style="color: #ef4444; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #ef4444;">Time's Up!</h3><p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p></div>`;
             return;
         }
         timerDisplay.textContent = `${timeLeft}s`;
         if (timeLeft <= 5 && timeLeft > 0) {
-            timerDisplay.classList.add('timer-warning'); 
+            timerDisplay.classList.add('timer-warning');
             if (tickSoundPlayedForSecond !== timeLeft) { playSound(sfx.tick); tickSoundPlayedForSecond = timeLeft; }
         } else { timerDisplay.classList.remove('timer-warning'); }
     }, 100);
@@ -1114,9 +1133,9 @@ function renderQuestion() {
         const btn = document.createElement('button');
         btn.className = 'option-btn'; btn.textContent = opt;
         btn.onclick = () => {
-            playSound(sfx.click); clearInterval(questionTimer); stopSound(sfx.tick); 
+            playSound(sfx.click); clearInterval(questionTimer); stopSound(sfx.tick);
             isWaitingForOpponent = true;
-            if(socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft, myPersistentId);
+            if (socket) socket.emit('submit-answer', gameState.roomId, i, timeLeft, myPersistentId);
             optsContainer.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 25px; background: rgba(56, 189, 248, 0.1); border-radius: 16px; border: 2px dashed #38bdf8;"><h3 style="color: #38bdf8; margin-bottom: 10px; font-size: 1.5rem; text-shadow: 0 0 15px #38bdf8;">Answer Locked</h3><p style="color: white; font-size: 1rem; font-weight: 700; animation: pulse 1.5s infinite;">Waiting for opponent...</p></div>`;
         };
         optsContainer.appendChild(btn);
@@ -1125,29 +1144,29 @@ function renderQuestion() {
 
 socket.on('load-next-question', () => { switchScreen(screens.quiz); gameState.currentQuestionIndex++; renderQuestion(); });
 
-socket.on('restart-game', (g, sanitizedQuestions) => { 
+socket.on('restart-game', (g, sanitizedQuestions) => {
     clearInterval(pauseTimerInterval); resetPowerUps(); isMatchFinished = false; isWaitingForOpponent = false;
     document.getElementById('help-btn').style.display = 'none';
-    document.querySelector('.chat-container').classList.remove('expanded-chat'); 
+    document.querySelector('.chat-container').classList.remove('expanded-chat');
     updateBackground(false);
     gameState.genre = g; gameState.questions = sanitizedQuestions;
-    gameState.currentQuestionIndex = 0; gameState.myScore = 0; gameState.enemyScore = 0; 
+    gameState.currentQuestionIndex = 0; gameState.myScore = 0; gameState.enemyScore = 0;
     gameState.myWager = null; gameState.enemyWager = null;
     startCountdownSequence();
 });
 
 socket.on('enemy-powerup', (type, enemyName) => {
-    if(type === '5050') showToast(`<strong>${enemyName}</strong> used Decrypt!`);
-    if(type === 'freeze') {
+    if (type === '5050') showToast(`<strong>${enemyName}</strong> used Decrypt!`);
+    if (type === 'freeze') {
         showToast(`<strong>${enemyName}</strong> overclocked their timer!`);
         timerDisplay.classList.remove('ice-flash'); void timerDisplay.offsetWidth; timerDisplay.classList.add('ice-flash');
     }
-    if(type === 'jammer') {
+    if (type === 'jammer') {
         showToast(`<strong>${enemyName}</strong> glitched your screen!`);
         optsContainer.classList.add('jammed-state');
         const vig = document.getElementById('jammer-vignette');
         vig.classList.add('vignette-active');
-        setTimeout(() => { optsContainer.classList.remove('jammed-state'); vig.classList.remove('vignette-active'); }, 5000); 
+        setTimeout(() => { optsContainer.classList.remove('jammed-state'); vig.classList.remove('vignette-active'); }, 5000);
     }
 });
 
@@ -1161,25 +1180,25 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('inapp-warning').classList.remove('hidden-element');
         document.querySelector('.app-container').style.display = 'none';
         const overlay = document.getElementById('entry-overlay');
-        if(overlay) overlay.style.display = 'none';
-        return; 
+        if (overlay) overlay.style.display = 'none';
+        return;
     }
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) document.getElementById('room-input').value = roomParam;
-    
+
     initProfile();
     setHourlyFunFact();
-    initProTips(); 
+    initProTips();
     injectDailyGenres('lobby-genre');
 });
 
-const screens = { 
-    menu: document.getElementById('menu-screen'), 
-    lobby: document.getElementById('lobby-screen'), 
+const screens = {
+    menu: document.getElementById('menu-screen'),
+    lobby: document.getElementById('lobby-screen'),
     countdown: document.getElementById('countdown-screen'),
-    wager: document.getElementById('wager-screen'), 
-    quiz: document.getElementById('quiz-screen') 
+    wager: document.getElementById('wager-screen'),
+    quiz: document.getElementById('quiz-screen')
 };
 const timerDisplay = document.getElementById('timer-display');
 const optsContainer = document.getElementById('options-container');
@@ -1199,11 +1218,11 @@ function resetPowerUps() {
     document.getElementById('powerups-ui').style.display = 'flex';
 }
 
-document.getElementById('pu-5050').onclick = function() {
+document.getElementById('pu-5050').onclick = function () {
     if (powerUps.fifty || gameState.currentQuestionIndex >= 6) return;
     powerUps.fifty = true; this.classList.add('used'); playSound(sfx.click); playDecryptSound();
     showToast("You activated Decrypt!");
-    if(socket) socket.emit('trigger-powerup', gameState.roomId, '5050', gameState.myName);
+    if (socket) socket.emit('trigger-powerup', gameState.roomId, '5050', gameState.myName);
     const q = gameState.questions[gameState.currentQuestionIndex];
     const buttons = document.querySelectorAll('.option-btn');
     q.removableIndices.forEach(idx => {
@@ -1216,13 +1235,13 @@ document.getElementById('pu-5050').onclick = function() {
     setTimeout(() => document.body.classList.remove('decrypt-screen-flash'), 500);
 };
 
-document.getElementById('pu-freeze').onclick = function() {
+document.getElementById('pu-freeze').onclick = function () {
     if (powerUps.freeze || gameState.currentQuestionIndex >= 6) return;
     powerUps.freeze = true; this.classList.add('used'); playSound(sfx.click); playOverclockSound();
     showToast("You activated Overclock!");
-    if(socket) socket.emit('trigger-powerup', gameState.roomId, 'freeze', gameState.myName);
-    expectedEndTime += 8000; 
-    timerDisplay.textContent = `${Math.ceil((expectedEndTime - Date.now())/1000)}s`;
+    if (socket) socket.emit('trigger-powerup', gameState.roomId, 'freeze', gameState.myName);
+    expectedEndTime += 8000;
+    timerDisplay.textContent = `${Math.ceil((expectedEndTime - Date.now()) / 1000)}s`;
     timerDisplay.classList.add('overclock-active');
     document.body.classList.add('overclock-screen-flash');
     setTimeout(() => {
@@ -1232,26 +1251,26 @@ document.getElementById('pu-freeze').onclick = function() {
     }, 1000);
 };
 
-document.getElementById('pu-jammer').onclick = function() {
+document.getElementById('pu-jammer').onclick = function () {
     if (powerUps.jammer || gameState.currentQuestionIndex >= 6) return;
     powerUps.jammer = true; this.classList.add('used'); playSound(sfx.click); playGlitchSound();
     showToast("You glitched their screen!");
-    if(socket) socket.emit('trigger-powerup', gameState.roomId, 'jammer', gameState.myName);
+    if (socket) socket.emit('trigger-powerup', gameState.roomId, 'jammer', gameState.myName);
 };
 
 document.querySelectorAll('.wager-btn').forEach(btn => {
     btn.onclick = (e) => {
-        if (gameState.myWager) return; 
+        if (gameState.myWager) return;
         playSound(sfx.click);
         const amount = parseInt(e.target.getAttribute('data-wager'));
         gameState.myWager = amount;
         document.querySelectorAll('.wager-btn').forEach(b => {
-            b.disabled = true; if(b !== e.target) b.style.opacity = '0.3';
+            b.disabled = true; if (b !== e.target) b.style.opacity = '0.3';
         });
         const waitText = document.getElementById('wager-wait-text');
         waitText.textContent = "Waiting for opponent to lock in...";
         waitText.classList.remove('hidden-element');
-        if(socket) socket.emit('submit-wager', gameState.roomId, amount, myPersistentId);
+        if (socket) socket.emit('submit-wager', gameState.roomId, amount, myPersistentId);
     };
 });
 
@@ -1262,7 +1281,7 @@ document.querySelectorAll('#lobby-difficulty .genre-option').forEach(option => {
         document.querySelectorAll('#lobby-difficulty .genre-option').forEach(opt => opt.classList.remove('selected'));
         e.target.classList.add('selected');
         mySelectedDifficulty = e.target.getAttribute('data-difficulty');
-        if(socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
+        if (socket) socket.emit('update-settings', gameState.roomId, mySelectedGenre, mySelectedDifficulty);
     };
 });
 
@@ -1270,8 +1289,8 @@ document.getElementById('create-btn').onclick = () => {
     playSound(sfx.click);
     const btn = document.getElementById('create-btn');
     btn.textContent = "Creating..."; btn.disabled = true; btn.style.opacity = '0.7';
-    if(socket) socket.emit('create-room', mySelectedAvatar, gameState.myName, mySelectedGenre, mySelectedDifficulty, myPersistentId);
-    
+    if (socket) socket.emit('create-room', mySelectedAvatar, gameState.myName, mySelectedGenre, mySelectedDifficulty, myPersistentId);
+
     setTimeout(() => {
         btn.textContent = "Create Room"; btn.disabled = false; btn.style.opacity = '1';
     }, 2000);
@@ -1290,22 +1309,22 @@ document.getElementById('copy-link-btn').onclick = () => {
 document.getElementById('join-btn').onclick = () => {
     playSound(sfx.click);
     const c = document.getElementById('room-input').value;
-    if(!c) return;
-    if(socket) socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, gameState.myName, myPersistentId);
+    if (!c) return;
+    if (socket) socket.emit('join-room', c.toUpperCase(), mySelectedAvatar, gameState.myName, myPersistentId);
 };
 
 document.getElementById('start-game-btn').onclick = () => {
     playSound(sfx.click);
     const btn = document.getElementById('start-game-btn');
     btn.textContent = "Loading..."; btn.disabled = true; btn.style.opacity = '0.7';
-    if(socket) socket.emit('start-game', gameState.roomId);
+    if (socket) socket.emit('start-game', gameState.roomId);
 };
 
 // --- EMOJI PICKER (IN-GAME CHAT ONLY) ---
 const emojiBtn = document.getElementById('emoji-btn');
 const emojiPicker = document.getElementById('emoji-picker');
 const chatIn = document.getElementById('chat-input');
-const emojiList = ['😀','😂','🤣','😊','😍','😭','🥺','😎','🔥','👍','❤️','✨','💀','💯','🤔','🙌','👀','🤯','🎉','💪'];
+const emojiList = ['😀', '😂', '🤣', '😊', '😍', '😭', '🥺', '😎', '🔥', '👍', '❤️', '✨', '💀', '💯', '🤔', '🙌', '👀', '🤯', '🎉', '💪'];
 
 if (emojiBtn && emojiPicker) {
     emojiList.forEach(emoji => {
@@ -1330,12 +1349,12 @@ function addMsg(n, t, me) {
 }
 
 document.getElementById('send-chat-btn').onclick = () => {
-    playSound(sfx.notif); 
-    const t = chatIn.value.trim(); if(!t) return;
-    if(socket) socket.emit('send-chat', gameState.roomId, { name: gameState.myName, text: t });
+    playSound(sfx.notif);
+    const t = chatIn.value.trim(); if (!t) return;
+    if (socket) socket.emit('send-chat', gameState.roomId, { name: gameState.myName, text: t });
     addMsg("You", t, true); chatIn.value = "";
 };
-document.getElementById('chat-input').onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
+document.getElementById('chat-input').onkeypress = (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); };
 
 // --- SMART MOBILE SCROLLING ---
 if (chatIn) {
@@ -1348,11 +1367,11 @@ if (chatIn) {
 
 // --- TYPEWRITER EFFECT ---
 function typewriterEffect(element, text, speed = 15) {
-    element.innerHTML = '';
+    element.textContent = '';
     let i = 0;
     const interval = setInterval(() => {
         if (i < text.length) {
-            element.innerHTML += text.charAt(i);
+            element.textContent = text.substring(0, i + 1);
             i++;
         } else {
             clearInterval(interval);
@@ -1360,4 +1379,4 @@ function typewriterEffect(element, text, speed = 15) {
     }, speed);
     return interval;
 }
-
+

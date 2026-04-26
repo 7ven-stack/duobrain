@@ -114,6 +114,10 @@ function updateGlobalStats() {
 io.on('connection', (socket) => {
     updateGlobalStats();
 
+    socket.on('ping-test', (clientTime, callback) => {
+        if (typeof callback === 'function') callback(clientTime);
+    });
+
     socket.on('create-room', async (avatar, playerName, genre, difficulty, playerId) => {
         const roomId = generateRoomCode();
         rooms[roomId] = { 

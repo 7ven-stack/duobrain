@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="DuoBrain: A real-time 1v1 multiplayer trivia game. Test your knowledge, use power-ups, and outsmart your opponent.">
     <title>DuoBrain</title>
     
@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#6366f1">
     <link rel="apple-touch-icon" href="icon-192.png">
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3.0">
     <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -37,12 +37,11 @@
             <input type="text" id="setup-name" placeholder="Enter your name" maxlength="15" autocomplete="off" style="width: 100%; margin-bottom: 20px; text-align: center; font-size: 1.2rem; padding: 15px;">
 
             <p style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Choose your Avatar</p>
-            <div class="avatar-selector" id="setup-avatar-selector" style="margin-bottom: 30px;">
-                <div class="avatar-option selected" data-avatar="🦊" role="button" tabindex="0">🦊</div>
-                <div class="avatar-option" data-avatar="🐼" role="button" tabindex="0">🐼</div>
-                <div class="avatar-option" data-avatar="🐯" role="button" tabindex="0">🐯</div>
-                <div class="avatar-option" data-avatar="🐸" role="button" tabindex="0">🐸</div>
-                <div class="avatar-option" id="custom-avatar-btn" role="button" tabindex="0" title="Upload Photo" style="font-size: 2rem; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 200;">+</div>
+            <div class="avatar-selector" id="setup-avatar-selector" style="margin-bottom: 30px; flex-wrap: wrap; gap: 10px;">
+                <div class="avatar-option" id="custom-avatar-btn" role="button" tabindex="0" title="Upload Photo" style="flex-shrink: 0; font-size: 2rem; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 200;">+</div>
+                <div class="avatar-option selected" data-avatar="🐼" role="button" tabindex="0" style="flex-shrink: 0;">🐼</div>
+                <div class="avatar-option" data-avatar="🐯" role="button" tabindex="0" style="flex-shrink: 0;">🐯</div>
+                <div class="avatar-option" data-avatar="🐸" role="button" tabindex="0" style="flex-shrink: 0;">🐸</div>
             </div>
             <input type="file" id="custom-avatar-input" accept="image/*" style="display: none;">
 
@@ -74,7 +73,9 @@
 
     <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
-            <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">&times;</button>
+            <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
             <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
             <div class="rules-scroll">
                 <h3>The Basics</h3>
@@ -109,11 +110,11 @@
                 </svg>
             </button>
             
-            <div id="menu-profile-display" style="position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);" title="Click to edit profile">
-                <span class="cyber-avatar" style="font-size:1.2rem;">🦊</span>
+            <div id="menu-profile-display" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);" title="Click to edit profile">
+                <span class="cyber-avatar" style="font-size:1.2rem;">🐼</span>
             </div>
 
-            <h1 style="text-align: center; margin-bottom: 5px;"><span class="glitch-text" data-text="DUOBRAIN">DUOBRAIN</span> <span class="badge">LIVE</span></h1>
+            <h1 style="text-align: center; margin-bottom: 5px;"><span class="glitch-text" data-text="DUOBRAIN">DUOBRAIN</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
 
             <div class="split-layout">
@@ -274,7 +275,7 @@
         </section>
     </main>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=3.0"></script>
 
     <script>
         if ('serviceWorker' in navigator) {
