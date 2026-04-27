@@ -1,19 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="DuoBrain: A real-time 1v1 multiplayer trivia game. Test your knowledge, use power-ups, and outsmart your opponent.">
+    <meta name="description"
+        content="DuoBrain: A real-time 1v1 multiplayer trivia game. Test your knowledge, use power-ups, and outsmart your opponent.">
     <title>DuoBrain</title>
-    
+
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#6366f1">
     <link rel="apple-touch-icon" href="icon-192.png">
 
     <link rel="stylesheet" href="styles.css?v=3.0">
-    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700;800&family=Rajdhani:wght@400;600;700&display=swap"
+        rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
 </head>
+
 <body>
 
     <div id="jammer-vignette" class="vignette-overlay"></div>
@@ -22,24 +27,39 @@
 
     <img id="bg-image" src="neon-retrowave-art-3840x2160-16098.jpg" alt="Neon Retrowave Background">
 
-    <div id="entry-overlay" class="modal active-screen" style="z-index: 999999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: flex;">
-        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 50px;">
-            <h1 style="font-size: 3.5rem; margin-bottom: 10px; color: var(--primary-color); text-transform: uppercase;">DuoBrain</h1>
-            <p style="color: var(--secondary-color); font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase;">Connecting to servers...</p>
+    <div id="entry-overlay" class="modal active-screen"
+        style="z-index: 999999; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); display: flex;">
+        <div class="modal-content card"
+            style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 50px;">
+            <h1 style="font-size: 3.5rem; margin-bottom: 10px; color: var(--primary-color); text-transform: uppercase;">
+                DuoBrain</h1>
+            <p
+                style="color: var(--secondary-color); font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase;">
+                Connecting to servers...</p>
         </div>
     </div>
 
-    <div id="profile-setup-overlay" class="modal hidden-element" style="z-index: 999998; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
-        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 40px; width: 90%; max-width: 400px;">
+    <div id="profile-setup-overlay" class="modal hidden-element"
+        style="z-index: 999998; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
+        <div class="modal-content card"
+            style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid var(--primary-color); padding: 40px; width: 90%; max-width: 400px;">
             <h2 style="font-size: 2rem; color: white; margin-bottom: 5px;">Welcome to DuoBrain</h2>
-            <p style="color: var(--text-muted); margin-bottom: 25px; font-size: 0.9rem;">Create your profile to start playing</p>
+            <p style="color: var(--text-muted); margin-bottom: 25px; font-size: 0.9rem;">Create your profile to start
+                playing</p>
 
-            <input type="text" id="setup-name" placeholder="Enter your name" maxlength="15" autocomplete="off" style="width: 100%; margin-bottom: 20px; text-align: center; font-size: 1.2rem; padding: 15px;">
+            <input type="text" id="setup-name" placeholder="Enter your name" maxlength="15" autocomplete="off"
+                style="width: 100%; margin-bottom: 20px; text-align: center; font-size: 1.2rem; padding: 15px;">
 
-            <p style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Choose your Avatar</p>
-            <div class="avatar-selector" id="setup-avatar-selector" style="margin-bottom: 30px; flex-wrap: wrap; gap: 10px;">
-                <div class="avatar-option" id="custom-avatar-btn" role="button" tabindex="0" title="Upload Photo" style="flex-shrink: 0; font-size: 2rem; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 200;">+</div>
-                <div class="avatar-option selected" data-avatar="🐼" role="button" tabindex="0" style="flex-shrink: 0;">🐼</div>
+            <p
+                style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">
+                Choose your Avatar</p>
+            <div class="avatar-selector" id="setup-avatar-selector"
+                style="margin-bottom: 30px; flex-wrap: wrap; gap: 10px;">
+                <div class="avatar-option" id="custom-avatar-btn" role="button" tabindex="0" title="Upload Photo"
+                    style="flex-shrink: 0; font-size: 2rem; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 200;">
+                    +</div>
+                <div class="avatar-option selected" data-avatar="🐼" role="button" tabindex="0" style="flex-shrink: 0;">
+                    🐼</div>
                 <div class="avatar-option" data-avatar="🐯" role="button" tabindex="0" style="flex-shrink: 0;">🐯</div>
                 <div class="avatar-option" data-avatar="🐸" role="button" tabindex="0" style="flex-shrink: 0;">🐸</div>
             </div>
@@ -49,23 +69,33 @@
         </div>
     </div>
 
-    <div id="pause-overlay" class="modal hidden-element" style="z-index: 99999; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);">
-        <div class="modal-content card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: none; border-left: 4px solid var(--primary-color); padding: 50px;">
-            <h2 style="font-size: 3rem; color: var(--primary-color); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">Game Paused</h2>
-            <p id="pause-text" style="color: white; font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase; background: #222; padding: 5px 15px;">Opponent disconnected. Waiting 30s...</p>
+    <div id="pause-overlay" class="modal hidden-element"
+        style="z-index: 99999; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);">
+        <div class="modal-content card"
+            style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: none; border-left: 4px solid var(--primary-color); padding: 50px;">
+            <h2
+                style="font-size: 3rem; color: var(--primary-color); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">
+                Game Paused</h2>
+            <p id="pause-text"
+                style="color: white; font-size: 1.2rem; font-weight: 900; animation: pulse 1.5s infinite; text-transform: uppercase; background: #222; padding: 5px 15px;">
+                Opponent disconnected. Waiting 30s...</p>
         </div>
     </div>
 
     <div id="inapp-warning" class="modal hidden-element" style="z-index: 9999999; background: rgba(15, 23, 42, 0.98);">
-        <div class="modal-content card" style="display: flex; text-align: center; border: 2px solid #ef4444; padding: 40px 30px;">
+        <div class="modal-content card"
+            style="display: flex; text-align: center; border: 2px solid #ef4444; padding: 40px 30px;">
             <h2 style="color: #ef4444; font-size: 2rem; margin-bottom: 15px;">Action Required</h2>
             <p style="color: var(--text-main); font-size: 1.05rem; line-height: 1.6; margin-bottom: 25px;">
                 Messenger's built-in browser blocks multiplayer games from working properly.
             </p>
-            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px dashed var(--primary-color);">
+            <div
+                style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px dashed var(--primary-color);">
                 <p style="color: #cbd5e1; font-size: 1.1rem; font-weight: 600; line-height: 1.8;">
-                    1. Tap the <strong style="color: white; font-size: 1.3rem;">3 dots (⋮)</strong><br>in the top right corner.<br><br>
-                    2. Select <strong style="color: var(--primary-color); font-size: 1.3rem;">"Open in browser"</strong><br>(or Chrome/Safari).
+                    1. Tap the <strong style="color: white; font-size: 1.3rem;">3 dots (⋮)</strong><br>in the top right
+                    corner.<br><br>
+                    2. Select <strong style="color: var(--primary-color); font-size: 1.3rem;">"Open in
+                        browser"</strong><br>(or Chrome/Safari).
                 </p>
             </div>
         </div>
@@ -74,61 +104,87 @@
     <div id="rules-modal" class="modal hidden-element">
         <div class="modal-content card active-screen">
             <button id="close-rules-btn" class="close-btn" title="Close" aria-label="Close Rules">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
             </button>
-            <h2 style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">How to Play</h2>
+            <h2
+                style="margin-bottom: 15px; color: var(--primary-color); text-align: left; font-size: 1.8rem; font-weight: 900;">
+                How to Play</h2>
             <div class="rules-scroll">
                 <h3>The Basics</h3>
-                <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20 seconds to lock in your answer. Answer correctly to earn a point!</p>
-                
+                <p>DuoBrain is a fast-paced 1v1 trivia battle. The Host selects the category and difficulty. You have 20
+                    seconds to lock in your answer. Answer correctly to earn a point!</p>
+
                 <h3>The Clutch Round</h3>
-                <p>Before Round 5 begins, you will see the category and must risk <strong>1, 2, or 3 points</strong>. Answer correctly to win those points, but guess wrong and you lose them! This is your chance for a massive clutch comeback.</p>
+                <p>Before Round 5 begins, you will see the category and must risk <strong>1, 2, or 3 points</strong>.
+                    Answer correctly to win those points, but guess wrong and you lose them! This is your chance for a
+                    massive clutch comeback.</p>
 
                 <h3>Sudden Death Round</h3>
-                <p>The final round is Sudden Death! The pressure is doubled with only 7 seconds on the clock. If both players answer correctly, the player who answered <strong>fastest</strong> steals the point.</p>
-                
+                <p>The final round is Sudden Death! The pressure is doubled with only 7 seconds on the clock. If both
+                    players answer correctly, the player who answered <strong>fastest</strong> steals the point.</p>
+
                 <h3>Power-Ups</h3>
-                <p>You can use each power-up exactly once per match. Use them strategically to disrupt your opponent or save yourself!</p>
+                <p>You can use each power-up exactly once per match. Use them strategically to disrupt your opponent or
+                    save yourself!</p>
                 <ul>
                     <li><strong>Decrypt:</strong> Instantly removes two incorrect answers from your screen.</li>
                     <li><strong>Overclock:</strong> Adds 8 seconds to your timer, buying you more time to think.</li>
-                    <li><strong>Glitch:</strong> Blurs your opponent's screen and shakes their answers, causing chaos!</li>
+                    <li><strong>Glitch:</strong> Blurs your opponent's screen and shakes their answers, causing chaos!
+                    </li>
                 </ul>
             </div>
         </div>
     </div>
 
     <main class="app-container">
-        
+
         <section id="menu-screen" class="card active-screen">
             <button id="help-btn" class="help-btn" title="How to Play" aria-label="Open How to Play">?</button>
-            <button id="mute-btn" class="help-btn" title="Toggle Audio" aria-label="Toggle Audio" style="display: flex; align-items: center; justify-content: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button id="mute-btn" class="help-btn" title="Toggle Audio" aria-label="Toggle Audio"
+                style="display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
                 </svg>
             </button>
-            
-            <div id="menu-profile-display" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);" title="Click to edit profile">
+
+            <div id="menu-profile-display"
+                style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(0,0,0,0.5); border: 2px solid var(--secondary-color); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: inset 0 0 10px rgba(1, 205, 254, 0.2);"
+                title="Click to edit profile">
                 <span class="cyber-avatar" style="font-size:1.2rem;">🐼</span>
             </div>
 
-            <h1 style="text-align: center; margin-bottom: 5px;"><span class="glitch-text" data-text="DUOBRAIN">DUOBRAIN</span></h1>
+            <h1 style="text-align: center; margin-bottom: 5px;"><span class="glitch-text"
+                    data-text="DUOBRAIN">DUOBRAIN</span></h1>
             <p class="subtitle">Online 1v1 Trivia</p>
 
             <div class="split-layout">
                 <div class="panel">
                     <h3>Host a Game</h3>
-                    <div style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--secondary-color); padding: 11px 10px; margin-bottom: 20px; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
+                    <div
+                        style="display: flex; justify-content: space-evenly; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--secondary-color); padding: 11px 10px; margin-bottom: 20px; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
                         <div style="text-align: center;">
-                            <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Online Players</p>
-                            <p id="stat-online" style="font-size: 1.1rem; color: var(--secondary-color); font-weight: 900; margin: 0;">1</p>
+                            <p
+                                style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">
+                                Online Players</p>
+                            <p id="stat-online"
+                                style="font-size: 1.1rem; color: var(--secondary-color); font-weight: 900; margin: 0;">1
+                            </p>
                         </div>
                         <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
                         <div style="text-align: center;">
-                            <p style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">Active Matches</p>
-                            <p id="stat-matches" style="font-size: 1.1rem; color: var(--primary-color); font-weight: 900; margin: 0;">0</p>
+                            <p
+                                style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px;">
+                                Active Matches</p>
+                            <p id="stat-matches"
+                                style="font-size: 1.1rem; color: var(--primary-color); font-weight: 900; margin: 0;">0
+                            </p>
                         </div>
                     </div>
 
@@ -136,24 +192,23 @@
 
                     <div class="quick-rules">
                         <h4>Pro-Tip</h4>
-                        <div id="pro-tip-display" style="font-size: 0.85rem; color: #cbd5e1; text-align: center; line-height: 1.5; font-weight: 600; min-height: 70px; display: flex; align-items: center; justify-content: center; padding: 0 5px;">
+                        <div id="pro-tip-display"
+                            style="font-size: 0.85rem; color: #cbd5e1; text-align: center; line-height: 1.5; font-weight: 600; min-height: 70px; display: flex; align-items: center; justify-content: center; padding: 0 5px;">
                             Loading tip...
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="divider">OR</div>
-                
+
                 <div class="panel">
                     <h3>Join a Game</h3>
-                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4" aria-label="Room Code" style="margin-top: 10px;">
+                    <input type="text" id="room-input" placeholder="Room Code" maxlength="4" aria-label="Room Code"
+                        style="margin-top: 10px;">
                     <button id="join-btn" class="secondary-btn" aria-label="Join Room">Join Room</button>
 
-                    <div class="quick-rules">
-                        <h4>Did You Know?</h4>
-                        <div id="fun-fact-display" style="font-size: 0.85rem; color: #cbd5e1; text-align: center; line-height: 1.5; font-weight: 600; min-height: 70px; display: flex; align-items: center; justify-content: center; padding: 0 5px;">
-                            Loading fact...
-                        </div>
+                    <div id="global-comms-display" class="terminal-feed">
+                        <div class="terminal-line info">> [SYS]: Establishing secure connection...</div>
                     </div>
                 </div>
             </div>
@@ -161,22 +216,35 @@
         </section>
 
         <section id="lobby-screen" class="card hidden-screen" style="text-align: center;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px 20px; border: 1px solid var(--secondary-color); clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px 20px; border: 1px solid var(--secondary-color); clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);">
                 <div style="text-align: left;">
-                    <p style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Room Code</p>
-                    <h2 id="room-code-display" style="color: var(--primary-color); font-size: 2.5rem; letter-spacing: 5px; margin: 0; text-transform: uppercase; font-weight: 900;">----</h2>
+                    <p
+                        style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">
+                        Room Code</p>
+                    <h2 id="room-code-display"
+                        style="color: var(--primary-color); font-size: 2.5rem; letter-spacing: 5px; margin: 0; text-transform: uppercase; font-weight: 900;">
+                        ----</h2>
                 </div>
                 <div style="text-align: right;">
-                    <p id="lobby-status-text" style="color: var(--primary-color); font-weight: 900; font-size: 0.9rem; animation: pulse 1.5s infinite; text-transform: uppercase;">Waiting for Player...</p>
-                    <p id="lobby-players-text" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">1 / 2 Connected</p>
+                    <p id="lobby-status-text"
+                        style="color: var(--primary-color); font-weight: 900; font-size: 0.9rem; animation: pulse 1.5s infinite; text-transform: uppercase;">
+                        Waiting for Player...</p>
+                    <p id="lobby-players-text" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">1 /
+                        2 Connected</p>
                 </div>
             </div>
 
-            <h4 style="margin: 10px 0; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Category</h4>
+            <h4
+                style="margin: 10px 0; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">
+                Category</h4>
             <div class="genre-selector" id="lobby-genre" style="margin-bottom: 15px;"></div>
 
-            <h4 style="margin: 15px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">Difficulty</h4>
-            <div class="genre-selector" id="lobby-difficulty" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
+            <h4
+                style="margin: 15px 0 10px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 800;">
+                Difficulty</h4>
+            <div class="genre-selector" id="lobby-difficulty"
+                style="grid-template-columns: repeat(4, 1fr); margin-bottom: 25px;">
                 <div class="genre-option selected" data-difficulty="any" role="button" tabindex="0">Any</div>
                 <div class="genre-option" data-difficulty="easy" role="button" tabindex="0">Easy</div>
                 <div class="genre-option" data-difficulty="medium" role="button" tabindex="0">Med</div>
@@ -184,32 +252,51 @@
             </div>
 
             <div style="display: flex; gap: 10px;">
-                <button id="copy-link-btn" class="secondary-btn" style="flex: 1; font-size: 0.95rem;" aria-label="Copy Invite Link">Copy Link</button>
+                <button id="copy-link-btn" class="secondary-btn" style="flex: 1; font-size: 0.95rem;"
+                    aria-label="Copy Invite Link">Copy Link</button>
                 <button id="start-game-btn" class="primary-btn hidden-element" style="flex: 2;">Start Match</button>
             </div>
-            <p id="guest-waiting-text" class="hidden-element" style="color: var(--primary-color); font-weight: 700; margin-top: 15px; animation: pulse 1.5s infinite;">Waiting for Host to start...</p>
+            <p id="guest-waiting-text" class="hidden-element"
+                style="color: var(--primary-color); font-weight: 700; margin-top: 15px; animation: pulse 1.5s infinite;">
+                Waiting for Host to start...</p>
         </section>
 
         <section id="countdown-screen" class="card hidden-screen" style="text-align: center; justify-content: center;">
-            <p style="font-size: 1.5rem; color: var(--text-muted); font-weight: 800; letter-spacing: 5px; text-transform: uppercase; margin-bottom: 10px;">Match Found</p>
-            <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); font-weight: 900; margin: 0;">3</h2>
+            <p
+                style="font-size: 1.5rem; color: var(--text-muted); font-weight: 800; letter-spacing: 5px; text-transform: uppercase; margin-bottom: 10px;">
+                Match Found</p>
+            <h2 id="countdown-text" style="font-size: 8rem; color: var(--primary-color); font-weight: 900; margin: 0;">3
+            </h2>
         </section>
 
-        <section id="wager-screen" class="card hidden-screen" style="text-align: center; justify-content: center; min-height: 400px;">
-            <p style="font-size: 1.2rem; color: var(--text-muted); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">Round 5</p>
-            <h2 style="font-size: 3.5rem; color: var(--primary-color); font-weight: 900; margin: 0 0 10px; text-transform: uppercase;">CLUTCH ROUND</h2>
-            <p style="font-size: 1.1rem; margin-bottom: 30px; color: var(--text-main);">Category: <span id="wager-category" style="color: var(--primary-color); font-weight: bold; text-transform: uppercase;">SCIENCE</span></p>
-            
+        <section id="wager-screen" class="card hidden-screen"
+            style="text-align: center; justify-content: center; min-height: 400px;">
+            <p
+                style="font-size: 1.2rem; color: var(--text-muted); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">
+                Round 5</p>
+            <h2
+                style="font-size: 3.5rem; color: var(--primary-color); font-weight: 900; margin: 0 0 10px; text-transform: uppercase;">
+                CLUTCH ROUND</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 30px; color: var(--text-main);">Category: <span
+                    id="wager-category"
+                    style="color: var(--primary-color); font-weight: bold; text-transform: uppercase;">SCIENCE</span>
+            </p>
+
             <div id="wager-controls" style="transition: opacity 0.3s; opacity: 0.3; pointer-events: none;">
-                <p style="margin-bottom: 15px; font-weight: 600; color: var(--text-muted);">Choose your risk (± points):</p>
+                <p style="margin-bottom: 15px; font-weight: 600; color: var(--text-muted);">Choose your risk (± points):
+                </p>
                 <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
-                    <button class="secondary-btn wager-btn" data-wager="1" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±1 Point</button>
-                    <button class="secondary-btn wager-btn" data-wager="2" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±2 Points</button>
-                    <button class="secondary-btn wager-btn" data-wager="3" style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±3 Points</button>
+                    <button class="secondary-btn wager-btn" data-wager="1"
+                        style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±1 Point</button>
+                    <button class="secondary-btn wager-btn" data-wager="2"
+                        style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±2 Points</button>
+                    <button class="secondary-btn wager-btn" data-wager="3"
+                        style="flex: 1; font-size: 1.3rem; padding: 15px 0;">±3 Points</button>
                 </div>
             </div>
-            
-            <p id="wager-wait-text" class="hidden-element" style="color: var(--primary-color); font-weight: 700; height: 20px;"></p>
+
+            <p id="wager-wait-text" class="hidden-element"
+                style="color: var(--primary-color); font-weight: 700; height: 20px;"></p>
         </section>
 
         <section id="quiz-screen" class="card hidden-screen quiz-layout">
@@ -219,7 +306,7 @@
                         <div id="my-avatar-display" class="avatar-large" aria-hidden="true">🦊</div>
                         <span id="my-label" class="profile-name">You</span>
                     </div>
-                    
+
                     <div style="display: flex; flex-direction: column; align-items: center;">
                         <h2 class="vs-text">VS</h2>
                         <div class="series-badge" id="series-score-display">Series: 0 - 0</div>
@@ -247,11 +334,14 @@
             </div>
 
             <div class="powerups-panel" id="powerups-ui">
-                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers" aria-label="Use Decrypt Powerup">Decrypt</button>
-                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds" aria-label="Use Overclock Powerup">Overclock</button>
-                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen" aria-label="Use Glitch Powerup">Glitch</button>
+                <button id="pu-5050" class="pu-btn" title="Remove 2 wrong answers"
+                    aria-label="Use Decrypt Powerup">Decrypt</button>
+                <button id="pu-freeze" class="pu-btn" title="Add 8 Seconds"
+                    aria-label="Use Overclock Powerup">Overclock</button>
+                <button id="pu-jammer" class="pu-btn" title="Blur opponent screen"
+                    aria-label="Use Glitch Powerup">Glitch</button>
             </div>
-            
+
             <div class="quiz-scroll-content">
                 <div class="question-container">
                     <h2 id="question-text">Loading match...</h2>
@@ -263,7 +353,8 @@
                 <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
                 <div class="chat-input-area">
                     <div class="input-with-emoji">
-                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" aria-label="Chat Input">
+                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off"
+                            aria-label="Chat Input">
                         <button id="emoji-btn" title="Add Emoji" aria-label="Open Emoji Picker">
                             <img src="happy.png" alt="smiley" class="custom-emoji-icon">
                         </button>
@@ -273,6 +364,10 @@
                 </div>
             </div>
         </section>
+
+        <footer class="app-footer">
+            <p>DEVELOPED BY <span class="radiant-text">7VEN</span></p>
+        </footer>
     </main>
 
     <script src="script.js?v=3.0"></script>
@@ -287,4 +382,5 @@
         }
     </script>
 </body>
+
 </html>

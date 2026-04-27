@@ -374,19 +374,36 @@ document.getElementById('menu-profile-display').onclick = () => {
     profileOverlay.style.display = 'flex';
 };
 
-// --- DYNAMIC FUN FACTS LOGIC ---
-const funFacts = [
-    "The human brain generates about 20 watts of electricity—enough to power a dim light bulb!",
-    "The first computer mouse was invented in 1964 and was made out of carved wood.",
-    "The highest possible score in Pac-Man is exactly 3,333,360 points.",
-    "A day on Venus is actually longer than a year on Venus.",
-    "Honey never spoils. Archaeologists have found 3,000-year-old honey in Egyptian tombs that is still edible.",
-    "Lightning strikes the Earth about 100 times every single second.",
-    "Sharks have been around for over 400 million years, meaning they existed before trees.",
-    "The Apollo 11 moon landing code was printed out and stood as tall as the software engineer who led the team.",
-    "Ice is technically classified as a mineral.",
-    "Owls don't have eyeballs. They have tube-shaped eyes that can't move, which is why they turn their heads."
-];
+// --- GLOBAL COMMS LOGIC ---
+function appendToTerminal(data) {
+    const display = document.getElementById('global-comms-display');
+    if (!display) return;
+    
+    const line = document.createElement('div');
+    line.className = `terminal-line ${data.type}`;
+    line.textContent = data.msg;
+    
+    display.appendChild(line);
+    
+    while (display.children.length > 6) {
+        display.removeChild(display.firstChild);
+    }
+}
+
+if (socket) {
+    socket.on('global-log', (data) => {
+        appendToTerminal(data);
+    });
+}
+
+function initGlobalComms() {
+    // Keep a slow heartbeat so the terminal doesn't look dead if no one is online
+    setInterval(() => {
+        const infos = ["Scanning network...", "Encrypting neuro-link...", "Listening for peers..."];
+        const msg = `> [INFO]: ${infos[Math.floor(Math.random() * infos.length)]}`;
+        appendToTerminal({ type: 'info', msg });
+    }, 15000);
+}
 
 const proTips = [
     "Save your Decrypt power-up for Round 5's Clutch Phase to secure a massive point swing!",
@@ -400,18 +417,6 @@ const proTips = [
     "A Glitch power-up shakes the enemy's screen and blurs their answers for 5 seconds.",
     "The host controls the category and difficulty. Pick your strongest subjects!"
 ];
-
-let currentFactTypewriter = null;
-function setHourlyFunFact() {
-    const display = document.getElementById('fun-fact-display');
-    if (!display) return;
-    const now = new Date();
-    const uniqueHourCounter = (now.getDate() * 24) + now.getHours();
-    const factIndex = uniqueHourCounter % funFacts.length;
-
-    if (currentFactTypewriter) clearInterval(currentFactTypewriter);
-    currentFactTypewriter = typewriterEffect(display, funFacts[factIndex], 15);
-}
 
 let currentTipIndex = 0;
 let currentTipTypewriter = null;
@@ -1188,7 +1193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (roomParam) document.getElementById('room-input').value = roomParam;
 
     initProfile();
-    setHourlyFunFact();
+    initGlobalComms();
     initProTips();
     injectDailyGenres('lobby-genre');
 });
@@ -1206,6 +1211,15 @@ const optsContainer = document.getElementById('options-container');
 function switchScreen(screenToActivate) {
     Object.values(screens).forEach(s => s.classList.replace('active-screen', 'hidden-screen'));
     screenToActivate.classList.replace('hidden-screen', 'active-screen');
+    
+    const appFooter = document.querySelector('.app-footer');
+    if (appFooter) {
+        if (screenToActivate === screens.menu) {
+            appFooter.style.display = 'block';
+        } else {
+            appFooter.style.display = 'none';
+        }
+    }
 }
 
 const rulesModal = document.getElementById('rules-modal');

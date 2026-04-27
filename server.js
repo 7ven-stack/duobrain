@@ -111,6 +111,10 @@ function updateGlobalStats() {
     io.emit('global-stats', playersOnline, activeMatches);
 }
 
+function broadcastGlobalLog(type, msg) {
+    io.emit('global-log', { type, msg });
+}
+
 io.on('connection', (socket) => {
     updateGlobalStats();
 
@@ -129,6 +133,7 @@ io.on('connection', (socket) => {
         socketToRoom[socket.id] = roomId; 
         socket.emit('room-created', roomId);
         updateGlobalStats(); 
+        broadcastGlobalLog('sys', `> [SYS]: User '${playerName}' instantiated a room.`);
     });
 
     socket.on('join-room', (roomId, avatar, playerName, playerId) => {
@@ -143,6 +148,7 @@ io.on('connection', (socket) => {
 
         socket.emit('room-joined', roomId, rooms[roomId].genre, rooms[roomId].difficulty);
         socket.to(roomId).emit('player-joined', playerName);
+        broadcastGlobalLog('sys', `> [SYS]: User '${playerName}' connected to a room.`);
     });
 
     socket.on('update-settings', (roomId, genre, difficulty) => {
@@ -177,6 +183,7 @@ io.on('connection', (socket) => {
                 room.status = 'playing';
                 room.questionStartTime = Date.now();
                 io.to(roomId).emit('game-start', room.players, room.genre, roomId, sanitizedQuestions);
+                broadcastGlobalLog('info', `> [INFO]: Match initializing in ${room.genre.toUpperCase()}...`);
             } catch (error) {
                 console.error("Game Start Error:", error);
                 room.status = 'lobby'; 
@@ -228,6 +235,24 @@ io.on('connection', (socket) => {
                 } else if (ans1.index === correctAns && ans2.index === correctAns) {
                     if (ans1.time < ans2.time) room.scores[p1]++;
                     else if (ans2.time < ans1.time) room.scores[p2]++;
+                }
+                
+                let winnerName = null;
+                let loserName = null;
+                const p1Data = room.players.find(p => p.playerId === p1);
+                const p2Data = room.players.find(p => p.playerId === p2);
+                if (room.scores[p1] > room.scores[p2]) {
+                    winnerName = p1Data ? p1Data.name : 'Unknown';
+                    loserName = p2Data ? p2Data.name : 'Unknown';
+                } else if (room.scores[p2] > room.scores[p1]) {
+                    winnerName = p2Data ? p2Data.name : 'Unknown';
+                    loserName = p1Data ? p1Data.name : 'Unknown';
+                }
+                
+                if (winnerName && loserName) {
+                    broadcastGlobalLog('match', `> [MATCH]: '${winnerName}' defeated '${loserName}' in ${room.genre.toUpperCase()}.`);
+                } else {
+                    broadcastGlobalLog('match', `> [MATCH]: Draw concluded in ${room.genre.toUpperCase()}.`);
                 }
             }
 
@@ -314,6 +339,7 @@ io.on('connection', (socket) => {
                 if (!room.powerupsUsed[player.playerId][type]) {
                     room.powerupsUsed[player.playerId][type] = true;
                     socket.to(roomId).emit('enemy-powerup', type, playerName);
+                    broadcastGlobalLog('warn', `> [WARN]: '${playerName}' deployed powerup: ${type.toUpperCase()}`);
                 }
             }
         }
