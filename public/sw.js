@@ -1,4 +1,4 @@
-const CACHE_NAME = 'duobrain-cache-v11';
+const CACHE_NAME = 'duobrain-cache-v12';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -9,7 +9,8 @@ const urlsToCache = [
     '/tick.mp3',
     '/win.mp3',
     '/lose.mp3',
-    '/bgm.mp3'
+    '/bgm.mp3',
+    '/notif.mp3'  // Bug #4 Fix: was missing, caused silent failure offline
 ];
 
 // Install the new service worker and force it to take over immediately

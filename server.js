@@ -42,68 +42,91 @@ const categoryMap = {
     science: 17, math: 19, music: 12, geography: 22, 
     history: 23, movies: 11, gaming: 15, sports: 21, mythology: 20,
     computers: 18, anime: 31, books: 10, tv: 14, boardgames: 16,
-    comics: 29, gadgets: 30, art: 25, animals: 27,
-    general: 9, vehicles: 28, politics: 24, celebs: 26, theatre: 13, cartoons: 32
+    comics: 29, gadgets: 30, animals: 27,
+    general: 9, vehicles: 28, politics: 24, celebs: 26, cartoons: 32
+    // art(25) and theatre(13) removed — zero questions in DB
 };
 
 async function fetchQuestionsFromDB(genre, difficulty = 'any', amount = 6) {
-    const categoryId = categoryMap[genre] || 9; 
-    let matchFilter = { category: categoryId };
+    const categoryId = categoryMap[genre] || 9;
+
+    // Helper: run a single aggregate and return results (never throws, returns [])
+    async function tryFetch(matchFilter) {
+        try {
+            return await Question.aggregate([
+                { $match: matchFilter },
+                { $sample: { size: amount } }
+            ]);
+        } catch (e) {
+            console.error('DB aggregate error:', e.message);
+            return [];
+        }
+    }
+
+    let rawQuestions = [];
+    let usedFallback = false;
+
+    // ── TIER 1: Exact match — requested category AND difficulty ──────────────
     if (difficulty !== 'any') {
-        matchFilter.difficulty = difficulty;
+        rawQuestions = await tryFetch({ category: categoryId, difficulty });
+        if (rawQuestions.length >= amount) {
+            console.log(`[DB] ✅ Exact: cat=${categoryId} diff=${difficulty} → ${rawQuestions.length} qs`);
+        }
     }
 
-    try {
-        let rawQuestions = await Question.aggregate([
-            { $match: matchFilter },
-            { $sample: { size: amount } }
-        ]);
-
-        if ((!rawQuestions || rawQuestions.length < amount) && difficulty !== 'any') {
-            rawQuestions = await Question.aggregate([
-                { $match: { category: categoryId } },
-                { $sample: { size: amount } }
-            ]);
-        }
-
-        if (!rawQuestions || rawQuestions.length < amount) {
-            rawQuestions = await Question.aggregate([
-                { $match: { category: 9 } },
-                { $sample: { size: amount } }
-            ]);
-        }
-
-        if (!rawQuestions || rawQuestions.length < amount) {
-            rawQuestions = await Question.aggregate([
-                { $sample: { size: amount } }
-            ]);
-        }
-
-        return rawQuestions.map(item => {
-            const question = he.decode(item.question);
-            const correctAnswer = he.decode(item.correct_answer);
-            const incorrectAnswers = item.incorrect_answers.map(ans => he.decode(ans));
-            
-            let options = [...incorrectAnswers, correctAnswer].sort(() => Math.random() - 0.5);
-            const correctIdx = options.indexOf(correctAnswer);
-            
-            const wrongIndices = [];
-            options.forEach((opt, idx) => { if (idx !== correctIdx) wrongIndices.push(idx); });
-            const shuffledWrong = wrongIndices.sort(() => Math.random() - 0.5);
-            
-            const removableIndices = [];
-            if (shuffledWrong.length > 0) removableIndices.push(shuffledWrong[0]);
-            if (shuffledWrong.length > 1) removableIndices.push(shuffledWrong[1]);
-
-            return {
-                q: question, options: options, answer: correctIdx, removableIndices: removableIndices 
-            };
-        });
-    } catch (err) {
-        console.error("Database query failed:", err);
-        throw err; 
+    // ── TIER 2: Right category, any difficulty (only if diff was requested) ──
+    if (rawQuestions.length < amount && difficulty !== 'any') {
+        usedFallback = true;
+        console.log(`[DB] ⚠️  Fallback T2: cat=${categoryId}, any difficulty`);
+        rawQuestions = await tryFetch({ category: categoryId });
     }
+
+    // ── TIER 3: Any category (whole DB), preserve requested difficulty ────────
+    if (rawQuestions.length < amount) {
+        usedFallback = true;
+        const filter = difficulty !== 'any' ? { difficulty } : {};
+        console.log(`[DB] ⚠️  Fallback T3: any category, diff=${difficulty}`);
+        rawQuestions = await tryFetch(filter);
+    }
+
+    // ── TIER 4: Nuclear — anything in the DB at all ───────────────────────────
+    if (rawQuestions.length < amount) {
+        usedFallback = true;
+        console.log(`[DB] ❌ Fallback T4: nuclear — returning any ${amount} questions`);
+        rawQuestions = await tryFetch({});
+    }
+
+    if (rawQuestions.length < amount) {
+        throw new Error(`Database has fewer than ${amount} questions total. Please run the seeder.`);
+    }
+
+    if (usedFallback) {
+        console.warn(`[DB] ⚠️  genre="${genre}" diff="${difficulty}" served via fallback.`);
+    }
+
+    return rawQuestions.map(item => {
+        const question = he.decode(item.question);
+        const correctAnswer = he.decode(item.correct_answer);
+        const incorrectAnswers = item.incorrect_answers.map(ans => he.decode(ans));
+
+        let options = [...incorrectAnswers, correctAnswer].sort(() => Math.random() - 0.5);
+        const correctIdx = options.indexOf(correctAnswer);
+
+        const wrongIndices = [];
+        options.forEach((opt, idx) => { if (idx !== correctIdx) wrongIndices.push(idx); });
+        const shuffledWrong = wrongIndices.sort(() => Math.random() - 0.5);
+
+        const removableIndices = [];
+        if (shuffledWrong.length > 0) removableIndices.push(shuffledWrong[0]);
+        if (shuffledWrong.length > 1) removableIndices.push(shuffledWrong[1]);
+
+        return {
+            q: question, options, answer: correctIdx, removableIndices,
+            difficulty: item.difficulty  // pass through so client can display it
+        };
+    });
 }
+
 
 function updateGlobalStats() {
     const playersOnline = io.engine.clientsCount;
@@ -266,6 +289,10 @@ io.on('connection', (socket) => {
     socket.on('next-question', (roomId) => {
         const room = rooms[roomId];
         if (room) {
+            // Bug #8 Fix: enforce host-only on the server, not just the client UI
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.role !== 'host') return;
+
             room.currentQuestionIndex++;
             if (room.currentQuestionIndex === 4) {
                 io.to(roomId).emit('start-wager-phase', room.genre);

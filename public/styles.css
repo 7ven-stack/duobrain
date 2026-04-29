@@ -1704,9 +1704,8 @@ button {
    FOOTER
    ========================================================= */
 .app-footer {
-    position: absolute;
-    bottom: 15px;
-    left: 0;
+    margin-top: 16px;
+    padding: 14px 0 max(14px, env(safe-area-inset-bottom));
     width: 100%;
     text-align: center;
     color: var(--text-muted);
@@ -1714,7 +1713,7 @@ button {
     text-transform: uppercase;
     letter-spacing: 2px;
     font-weight: 800;
-    z-index: 10;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .radiant-text {

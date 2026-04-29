@@ -32,6 +32,7 @@ let isMatchFinished = false;
 
 let pauseTimerInterval = null;
 let pauseCountdown = 30; // 30 second grace period for disconnects
+let createBtnTimer = null;
 
 // --- SAFE BACKGROUND UPDATER ---
 function updateBackground(isSuddenDeath) {
@@ -83,6 +84,7 @@ const sfx = {
 };
 
 function playSound(audioObj) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     if (!audioObj || !audioBuffers[audioObj.name]) return;
 
     // Prevent overlapping for tick to avoid phasing
@@ -217,6 +219,7 @@ function playGlitchSound() {
 }
 
 let bgmStarted = false;
+let bgmGainNode = null; // Bug #3 Fix: keep a reference so we can duck the BGM
 function startBGM() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
@@ -226,11 +229,11 @@ function startBGM() {
         bgmSource.buffer = audioBuffers['bgm'];
         bgmSource.loop = true;
 
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = sfx.bgm.vol;
+        bgmGainNode = audioCtx.createGain();
+        bgmGainNode.gain.value = sfx.bgm.vol;
 
-        bgmSource.connect(gainNode);
-        gainNode.connect(masterGain);
+        bgmSource.connect(bgmGainNode);
+        bgmGainNode.connect(masterGain);
         bgmSource.start(0);
     }
 }
@@ -390,11 +393,7 @@ function appendToTerminal(data) {
     }
 }
 
-if (socket) {
-    socket.on('global-log', (data) => {
-        appendToTerminal(data);
-    });
-}
+// Bug #1 Fix: global-log listener moved below socket = io('/') where socket is valid
 
 function initGlobalComms() {
     // Keep a slow heartbeat so the terminal doesn't look dead if no one is online
@@ -455,9 +454,12 @@ function initProTips() {
 }
 
 const genrePacks = [
+    // Pack 1 — unchanged, all populated
     ["science", "math", "music", "geography", "history", "movies", "gaming", "sports", "mythology"],
-    ["computers", "anime", "books", "tv", "boardgames", "comics", "gadgets", "art", "animals"],
-    ["general", "vehicles", "politics", "celebs", "theatre", "cartoons", "science", "geography", "music"]
+    // Pack 2 — replaced "art"(25, 0 qs) with "general" 
+    ["computers", "anime", "books", "tv", "boardgames", "comics", "gadgets", "general", "animals"],
+    // Pack 3 — replaced "theatre"(13, 0 qs) with "vehicles"
+    ["general", "vehicles", "politics", "celebs", "cartoons", "science", "geography", "music", "gaming"]
 ];
 
 function injectDailyGenres(containerId, isRematch = false) {
@@ -521,6 +523,11 @@ function injectDailyGenres(containerId, isRematch = false) {
 
 // --- NETWORK EVENTS ---
 socket = io('/');
+
+// Bug #1 Fix: global-log listener registered here, after socket exists
+socket.on('global-log', (data) => {
+    appendToTerminal(data);
+});
 
 socket.on('connect', () => {
     const overlay = document.getElementById('entry-overlay');
@@ -685,12 +692,13 @@ socket.on('default-win', () => {
     document.getElementById('turn-indicator').textContent = "Forfeit";
     document.querySelector('.chat-container').classList.add('expanded-chat');
 
-    sfx.bgm.volume = 0.1;
+    if (bgmGainNode) bgmGainNode.gain.value = 0.1; // Bug #3 Fix: use real GainNode reference
     playSound(sfx.win);
-    setTimeout(() => { sfx.bgm.volume = 0.3; }, 4000);
+    setTimeout(() => { if (bgmGainNode) bgmGainNode.gain.value = sfx.bgm.vol; }, 4000);
 });
 
 socket.on('room-created', id => {
+    clearTimeout(createBtnTimer); // Bug #5 Fix: cancel re-enable timer so room can't be double-created
     gameState.role = 'host';
     gameState.roomId = id;
     safeSetItem('duobrain_active_room', id);
@@ -799,7 +807,7 @@ socket.on('game-start', (players, genre, roomId, sanitizedQuestions) => {
 
     updateBackground(false);
 
-    gameState.roomId = roomId; gameState.genre = genre; gameState.myPlayerId = socket.id; gameState.questions = sanitizedQuestions;
+    gameState.roomId = roomId; gameState.genre = genre; gameState.myPlayerId = myPersistentId; gameState.questions = sanitizedQuestions; // Bug #2 Fix: use persistent ID not volatile socket.id
     const me = players.find(p => p.id === socket.id); const them = players.find(p => p.id !== socket.id);
     gameState.role = me.role;
 
@@ -895,7 +903,7 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
     const enemyId = Object.keys(answers).find(id => id !== myPersistentId);
     const enemyData = answers[enemyId];
 
-    if (!myData || !enemyData) return; // Failsafe check
+    if (!myData || !enemyData) { showToast("Data sync error. Reconnecting..."); setTimeout(() => window.location.reload(), 2000); return; } // Bug #7 Fix: show error and recover instead of silently stalling
 
     const myAns = myData.index;
     const enemyAns = enemyData.index;
@@ -965,9 +973,9 @@ socket.on('round-results', (answers, correctAns, serverScores) => {
         else if (res === "Defeat") gameState.seriesEnemyScore++;
         document.getElementById('series-score-display').textContent = `Series: ${gameState.seriesMyScore} - ${gameState.seriesEnemyScore}`;
 
-        sfx.bgm.volume = 0.1;
+        if (bgmGainNode) bgmGainNode.gain.value = 0.1; // Bug #3 Fix: use real GainNode reference
         if (res === "Victory") playSound(sfx.win); else playSound(sfx.lose);
-        setTimeout(() => { sfx.bgm.volume = 0.3; }, 4000);
+        setTimeout(() => { if (bgmGainNode) bgmGainNode.gain.value = sfx.bgm.vol; }, 4000);
 
         optsContainer.innerHTML = `
             <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 10px;">
@@ -1305,9 +1313,10 @@ document.getElementById('create-btn').onclick = () => {
     btn.textContent = "Creating..."; btn.disabled = true; btn.style.opacity = '0.7';
     if (socket) socket.emit('create-room', mySelectedAvatar, gameState.myName, mySelectedGenre, mySelectedDifficulty, myPersistentId);
 
-    setTimeout(() => {
+    clearTimeout(createBtnTimer);
+    createBtnTimer = setTimeout(() => {
         btn.textContent = "Create Room"; btn.disabled = false; btn.style.opacity = '1';
-    }, 2000);
+    }, 5000); // Bug #5 Fix: extended + cancellable via clearTimeout in room-created handler
 };
 
 document.getElementById('copy-link-btn').onclick = () => {
