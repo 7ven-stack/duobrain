@@ -522,7 +522,8 @@ function injectDailyGenres(containerId, isRematch = false) {
 }
 
 // --- NETWORK EVENTS ---
-socket = io('/');
+// Force WebSockets immediately to save protocol upgrade roundtrips
+socket = io('/', { transports: ['websocket'], upgrade: false });
 
 // Bug #1 Fix: global-log listener registered here, after socket exists
 socket.on('global-log', (data) => {

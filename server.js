@@ -14,7 +14,20 @@ const io = new Server(server, {
     pingTimeout: 5000    
 });
 
-app.use(express.static('public'));
+app.use(express.static('public', {
+    maxAge: '1y',
+    setHeaders: (res, path) => {
+        // Don't cache HTML so users always get the latest JS bundle links
+        if (path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
+
+// Health check endpoint for Render free tier uptime monitoring
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
 
 // Connect to MongoDB with a 5-second timeout to prevent infinite hanging
 const MONGO_URI = process.env.MONGO_URI;
@@ -47,15 +60,18 @@ const categoryMap = {
     // art(25) and theatre(13) removed — zero questions in DB
 };
 
+const questionCache = new Map();
+
 async function fetchQuestionsFromDB(genre, difficulty = 'any', amount = 6) {
     const categoryId = categoryMap[genre] || 9;
+    const cacheKey = `${genre}-${difficulty}`;
 
     // Helper: run a single aggregate and return results (never throws, returns [])
-    async function tryFetch(matchFilter) {
+    async function tryFetch(matchFilter, fetchAmount = amount) {
         try {
             return await Question.aggregate([
                 { $match: matchFilter },
-                { $sample: { size: amount } }
+                { $sample: { size: fetchAmount } }
             ]);
         } catch (e) {
             console.error('DB aggregate error:', e.message);
@@ -66,34 +82,61 @@ async function fetchQuestionsFromDB(genre, difficulty = 'any', amount = 6) {
     let rawQuestions = [];
     let usedFallback = false;
 
-    // ── TIER 1: Exact match — requested category AND difficulty ──────────────
-    if (difficulty !== 'any') {
-        rawQuestions = await tryFetch({ category: categoryId, difficulty });
-        if (rawQuestions.length >= amount) {
-            console.log(`[DB] ✅ Exact: cat=${categoryId} diff=${difficulty} → ${rawQuestions.length} qs`);
+    // ── CHECK CACHE FIRST ────────────────────────────────────────────────────
+    if (questionCache.has(cacheKey) && questionCache.get(cacheKey).length >= amount) {
+        rawQuestions = questionCache.get(cacheKey).splice(0, amount);
+        console.log(`[CACHE] ✅ Served ${amount} qs for ${cacheKey}. Remaining: ${questionCache.get(cacheKey).length}`);
+        
+        // If cache is getting low, pre-fetch in background without awaiting
+        if (questionCache.get(cacheKey).length < amount) {
+            console.log(`[CACHE] 🔄 Refilling cache in background for ${cacheKey}...`);
+            const bgFilter = difficulty !== 'any' ? { category: categoryId, difficulty } : { category: categoryId };
+            tryFetch(bgFilter, amount * 3).then(newQs => {
+                if (newQs.length > 0) {
+                    const existing = questionCache.get(cacheKey) || [];
+                    questionCache.set(cacheKey, [...existing, ...newQs]);
+                }
+            });
         }
-    }
+    } else {
+        // ── FETCH FROM DB AND CACHE ──────────────────────────────────────────────
+        const fetchAmount = amount * 3; // Fetch extra to cache
+        
+        // ── TIER 1: Exact match — requested category AND difficulty ──────────────
+        if (difficulty !== 'any') {
+            rawQuestions = await tryFetch({ category: categoryId, difficulty }, fetchAmount);
+            if (rawQuestions.length >= amount) {
+                console.log(`[DB] ✅ Exact: cat=${categoryId} diff=${difficulty} → ${rawQuestions.length} qs`);
+            }
+        }
 
-    // ── TIER 2: Right category, any difficulty (only if diff was requested) ──
-    if (rawQuestions.length < amount && difficulty !== 'any') {
-        usedFallback = true;
-        console.log(`[DB] ⚠️  Fallback T2: cat=${categoryId}, any difficulty`);
-        rawQuestions = await tryFetch({ category: categoryId });
-    }
+        // ── TIER 2: Right category, any difficulty (only if diff was requested) ──
+        if (rawQuestions.length < amount && difficulty !== 'any') {
+            usedFallback = true;
+            console.log(`[DB] ⚠️  Fallback T2: cat=${categoryId}, any difficulty`);
+            rawQuestions = await tryFetch({ category: categoryId }, fetchAmount);
+        }
 
-    // ── TIER 3: Any category (whole DB), preserve requested difficulty ────────
-    if (rawQuestions.length < amount) {
-        usedFallback = true;
-        const filter = difficulty !== 'any' ? { difficulty } : {};
-        console.log(`[DB] ⚠️  Fallback T3: any category, diff=${difficulty}`);
-        rawQuestions = await tryFetch(filter);
-    }
+        // ── TIER 3: Any category (whole DB), preserve requested difficulty ────────
+        if (rawQuestions.length < amount) {
+            usedFallback = true;
+            const filter = difficulty !== 'any' ? { difficulty } : {};
+            console.log(`[DB] ⚠️  Fallback T3: any category, diff=${difficulty}`);
+            rawQuestions = await tryFetch(filter, fetchAmount);
+        }
 
-    // ── TIER 4: Nuclear — anything in the DB at all ───────────────────────────
-    if (rawQuestions.length < amount) {
-        usedFallback = true;
-        console.log(`[DB] ❌ Fallback T4: nuclear — returning any ${amount} questions`);
-        rawQuestions = await tryFetch({});
+        // ── TIER 4: Nuclear — anything in the DB at all ───────────────────────────
+        if (rawQuestions.length < amount) {
+            usedFallback = true;
+            console.log(`[DB] ❌ Fallback T4: nuclear — returning any ${amount} questions`);
+            rawQuestions = await tryFetch({}, fetchAmount);
+        }
+        
+        // Store extra in cache
+        if (rawQuestions.length > amount) {
+            questionCache.set(cacheKey, rawQuestions.slice(amount));
+            rawQuestions = rawQuestions.slice(0, amount);
+        }
     }
 
     if (rawQuestions.length < amount) {
